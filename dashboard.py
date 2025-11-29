@@ -1,7 +1,9 @@
 import os
 import json
 import logging
-from flask import Flask, request, send_from_directory
+import queue
+import threading
+from flask import Flask, request, send_from_directory, Response, stream_with_context
 
 # Configure Flask to serve static files from React build
 app = Flask(__name__, static_folder='static', static_url_path='')
@@ -14,6 +16,80 @@ logging.basicConfig(
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
+
+# Thread-safe queue to store SSE client queues
+sse_clients = []
+sse_lock = threading.Lock()
+
+
+def broadcast_data(data):
+    """Broadcast data to all connected SSE clients"""
+    data_json = json.dumps(data)
+    message = f"data: {data_json}\n\n"
+    
+    with sse_lock:
+        # Remove disconnected clients
+        disconnected_clients = []
+        for i, client_queue in enumerate(sse_clients):
+            try:
+                client_queue.put_nowait(message)
+            except queue.Full:
+                disconnected_clients.append(i)
+            except Exception as e:
+                logger.warning(f"Error sending to SSE client: {e}")
+                disconnected_clients.append(i)
+        
+        # Remove disconnected clients (iterate in reverse to maintain indices)
+        for i in reversed(disconnected_clients):
+            sse_clients.pop(i)
+    
+    logger.info(f"Broadcasted data to {len(sse_clients)} SSE client(s)")
+
+
+@app.route("/events")
+def stream_events():
+    """Server-Sent Events endpoint for real-time data streaming"""
+    def event_stream():
+        # Create a queue for this client
+        client_queue = queue.Queue(maxsize=100)
+        
+        # Add client to the list
+        with sse_lock:
+            sse_clients.append(client_queue)
+        
+        logger.info(f"SSE client connected. Total clients: {len(sse_clients)}")
+        
+        try:
+            # Send initial connection message
+            yield f"data: {json.dumps({'type': 'connected', 'message': 'SSE connection established'})}\n\n"
+            
+            # Keep connection alive and send messages
+            while True:
+                try:
+                    # Wait for a message (with timeout for keep-alive)
+                    message = client_queue.get(timeout=30)
+                    yield message
+                except queue.Empty:
+                    # Send keep-alive comment
+                    yield ": keep-alive\n\n"
+        except GeneratorExit:
+            logger.info("SSE client disconnected")
+        finally:
+            # Remove client from the list
+            with sse_lock:
+                if client_queue in sse_clients:
+                    sse_clients.remove(client_queue)
+            logger.info(f"SSE client removed. Total clients: {len(sse_clients)}")
+    
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive'
+        }
+    )
 
 
 @app.route("/data", methods=["POST"])
@@ -31,6 +107,10 @@ def receive_data():
             f"Received data: {json.dumps(data, indent=2)}",
             extra={"client_ip": request.remote_addr, "data_size": len(json.dumps(data))}
         )
+        
+        # Broadcast data to all connected SSE clients
+        broadcast_data(data)
+        
         return {"status": "success", "message": "Data received"}, 200
     except json.JSONDecodeError as e:
         logger.error(
@@ -79,7 +159,7 @@ def serve_static(path):
 
 def main():
     logger.info("Starting GROUND STATION logic...")
-    port = int(os.getenv("PORT", 9999))
+    port = int(os.getenv("PORT", 5000))
     logger.info(f"Starting Flask web server on port {port}...")
     app.run(host="0.0.0.0", port=port, debug=True)
 

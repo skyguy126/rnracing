@@ -13,8 +13,8 @@ DEFAULT_BAUDRATE = os.getenv("OBD_BAUDRATE", None)  # None = try multiple, or sp
 # Terminal logging toggle - set CAR_LOG_TO_TERMINAL=1 to enable terminal logs
 LOG_TO_TERMINAL = os.getenv("CAR_LOG_TO_TERMINAL", "0").lower() in ("1", "true", "yes")
 
-# Ground station server URL - defaults to localhost:500 (matches ground.py default port)
-GROUND_STATION_URL = os.getenv("GROUND_STATION_URL", "http://localhost:500")
+# Ground station server URL - uses PORT env var or defaults to port 5000
+GROUND_STATION_URL = os.getenv("GROUND_STATION_URL") or f"http://localhost:{os.getenv('PORT', '5000')}"
 
 
 def connect_obd(port: Optional[str] = None, baudrate: Optional[int] = None) -> Optional[obd.OBD]:

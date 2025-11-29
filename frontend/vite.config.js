@@ -15,6 +15,10 @@ export default defineConfig({
         target: `http://localhost:${process.env.PORT || 5000}`,
         changeOrigin: true,
       },
+      '/events': {
+        target: `http://localhost:${process.env.PORT || 5000}`,
+        changeOrigin: true,
+      },
     },
   },
 })

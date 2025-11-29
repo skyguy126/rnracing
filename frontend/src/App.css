@@ -29,8 +29,10 @@
 .app-main {
   flex: 1;
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: center;
+  gap: 2rem;
   padding: 2rem;
 }
 
@@ -94,5 +96,32 @@
   overflow-x: auto;
   font-size: 0.9rem;
   border: 1px solid #dee2e6;
+}
+
+.connection-status {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.connection-status.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.connection-status.disconnected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.sse-data-section {
+  margin-top: 1.5rem;
+}
+
+.sse-data-section h3 {
+  margin: 0 0 0.75rem 0;
+  color: #333;
+  font-size: 1.1rem;
 }
 
