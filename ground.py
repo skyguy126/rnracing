@@ -1,42 +1,16 @@
 import os
 import json
 import logging
-from logging.handlers import RotatingFileHandler
 from flask import Flask, request, send_from_directory
 
 # Configure Flask to serve static files from React build
 app = Flask(__name__, static_folder='static', static_url_path='')
 
-# Set up logging with best practices
-log_file = "ground_station.log"
-
-# Create formatter with ISO 8601 timestamp, process/thread info, and function/line details
-formatter = logging.Formatter(
-    fmt='%(asctime)s.%(msecs)03dZ | %(levelname)-8s | [%(process)d:%(thread)d] | %(name)s:%(funcName)s:%(lineno)d | %(message)s',
-    datefmt='%Y-%m-%dT%H:%M:%S'
+# Set up logging for journald (level and function info only, journald handles timestamps/metadata)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s | %(name)s:%(funcName)s | %(message)s'
 )
-
-# File handler with rotation to prevent log files from growing too large
-file_handler = RotatingFileHandler(
-    log_file,
-    mode='a',
-    maxBytes=10*1024*1024,  # 10MB
-    backupCount=5,
-    encoding='utf-8'
-)
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(formatter)
-
-# Console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(formatter)
-
-# Configure root logger
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
-root_logger.addHandler(file_handler)
-root_logger.addHandler(console_handler)
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -105,7 +79,7 @@ def serve_static(path):
 
 def main():
     logger.info("Starting GROUND STATION logic...")
-    port = int(os.getenv("PORT", 500))
+    port = int(os.getenv("PORT", 9999))
     logger.info(f"Starting Flask web server on port {port}...")
     app.run(host="0.0.0.0", port=port, debug=True)
 

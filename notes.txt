@@ -10,4 +10,11 @@ systemctl status rnracing.service
 journalctl -u rnracing.service -f
 
 JSON
-{'speed': 254.0, 'rpm': 608.25, 'coolant_temp': -38, 'throttle': 2.3529411764705883, 'engine_load': 2.3529411764705883, 'fuel_level': 2.7450980392156863}
+{
+  "speed": 254.0,
+  "rpm": 608.25,
+  "coolant_temp": -38,
+  "throttle": 2.35,
+  "engine_load": 2.35,
+  "fuel_level": 2.75
+}

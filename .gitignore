@@ -32,3 +32,5 @@ static/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+
+font5x8.bin
