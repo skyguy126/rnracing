@@ -16,3 +16,10 @@ __pycache__/
 *.swo
 
 .envrc
+
+# macOS
+.DS_Store
+
+# obdgpslogger source and build artifacts (third-party package)
+obdgpslogger-0.16/
+obdgpslogger-0.16.tar.gz
