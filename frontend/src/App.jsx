@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import TelemetryChart from './TelemetryChart'
+import { validateTelemetryData } from './telemetrySchema'
 import './App.css'
 
 function App() {
@@ -23,20 +24,26 @@ function App() {
         const receivedData = JSON.parse(event.data)
         console.log('Received SSE data:', receivedData)
         
+        // Validate the data (warns but doesn't fail)
+        const processDataItem = (item) => {
+          const validated = validateTelemetryData(item)
+          return { ...validated, timestamp: new Date().toISOString() }
+        }
+        
         setSseData((prevData) => {
           if (prevData === null) {
             // First message - initialize with received data and add timestamp
             const dataWithTimestamp = Array.isArray(receivedData) 
-              ? receivedData.map(item => ({ ...item, timestamp: new Date().toISOString() }))
-              : [{ ...receivedData, timestamp: new Date().toISOString() }]
+              ? receivedData.map(processDataItem)
+              : [processDataItem(receivedData)]
             return dataWithTimestamp
           }
           
           if (Array.isArray(prevData)) {
             // If previous data is an array, append new data with timestamp
             const newDataPoint = Array.isArray(receivedData) 
-              ? receivedData.map(item => ({ ...item, timestamp: new Date().toISOString() }))
-              : [{ ...receivedData, timestamp: new Date().toISOString() }]
+              ? receivedData.map(processDataItem)
+              : [processDataItem(receivedData)]
             
             const newData = [...prevData, ...newDataPoint]
             
@@ -45,8 +52,8 @@ function App() {
           } else {
             // If previous data is an object, convert to array
             const newDataPoint = Array.isArray(receivedData)
-              ? receivedData.map(item => ({ ...item, timestamp: new Date().toISOString() }))
-              : [{ ...receivedData, timestamp: new Date().toISOString() }]
+              ? receivedData.map(processDataItem)
+              : [processDataItem(receivedData)]
             
             const newData = [prevData, ...newDataPoint]
             
