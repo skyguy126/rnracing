@@ -7,4 +7,5 @@ MarkupSafe==3.0.3
 Werkzeug==3.1.4
 obd==0.7.3
 pyserial==3.5
+requests==2.32.3
 setuptools>=80.9.0

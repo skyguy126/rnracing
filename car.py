@@ -2,12 +2,19 @@ import time
 import os
 import pathlib
 import obd
+import requests
 from typing import Optional
 
 # Default connection - will auto-detect port or use obdsim if available
 # Can be overridden via OBD_PORT environment variable
 DEFAULT_PORT = os.getenv("OBD_PORT", None)  # None = auto-detect, or specify like "/dev/ttyUSB0" or "/dev/pts/0" or "/dev/ttys019"
 DEFAULT_BAUDRATE = os.getenv("OBD_BAUDRATE", None)  # None = try multiple, or specify like "38400" or "9600"
+
+# Terminal logging toggle - set CAR_LOG_TO_TERMINAL=1 to enable terminal logs
+LOG_TO_TERMINAL = os.getenv("CAR_LOG_TO_TERMINAL", "0").lower() in ("1", "true", "yes")
+
+# Ground station server URL - defaults to localhost:500 (matches ground.py default port)
+GROUND_STATION_URL = os.getenv("GROUND_STATION_URL", "http://localhost:500")
 
 
 def connect_obd(port: Optional[str] = None, baudrate: Optional[int] = None) -> Optional[obd.OBD]:
@@ -146,9 +153,25 @@ def main():
             while True:
                 data = read_obd_data(obd_conn)
                 if data:
-                    print(f"[CAR] OBD Data: {data}")
+                    # Conditionally print to terminal based on env var
+                    if LOG_TO_TERMINAL:
+                        print(f"[CAR] OBD Data: {data}")
+                    
+                    # Send data to ground station
+                    try:
+                        response = requests.post(
+                            f"{GROUND_STATION_URL}/data",
+                            json=data,
+                            timeout=2
+                        )
+                        if LOG_TO_TERMINAL:
+                            print(f"[CAR] Ground station response: {response.status_code}")
+                    except requests.exceptions.RequestException as e:
+                        if LOG_TO_TERMINAL:
+                            print(f"[CAR] Failed to send data to ground station: {e}")
                 else:
-                    print("[CAR] No OBD data received")
+                    if LOG_TO_TERMINAL:
+                        print("[CAR] No OBD data received")
                 
                 time.sleep(1)  # Read every second
         except KeyboardInterrupt:

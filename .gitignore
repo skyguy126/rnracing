@@ -23,3 +23,6 @@ __pycache__/
 # obdgpslogger source and build artifacts (third-party package)
 obdgpslogger-0.16/
 obdgpslogger-0.16.tar.gz
+
+# ground logs
+ground_station.log
