@@ -23,8 +23,38 @@ sse_lock = threading.Lock()
 
 
 def broadcast_data(data):
-    """Broadcast data to all connected SSE clients"""
-    data_json = json.dumps(data)
+    """Broadcast data to all connected SSE clients with type field added"""
+    # Ensure data has a type field
+    # If type is not present, infer it from the data structure
+    if isinstance(data, dict):
+        if 'type' not in data:
+            # Infer type based on data structure
+            if 'latitude' in data and 'longitude' in data:
+                data['type'] = 'gps'
+            else:
+                # Default to 'obd' for backward compatibility
+                data['type'] = 'obd'
+        # Create a copy to avoid modifying the original
+        data_with_type = data.copy()
+    elif isinstance(data, list):
+        # Handle array of data items
+        data_with_type = []
+        for item in data:
+            if isinstance(item, dict):
+                item_copy = item.copy()
+                if 'type' not in item_copy:
+                    if 'latitude' in item_copy and 'longitude' in item_copy:
+                        item_copy['type'] = 'gps'
+                    else:
+                        item_copy['type'] = 'obd'
+                data_with_type.append(item_copy)
+            else:
+                data_with_type.append(item)
+    else:
+        # For non-dict, non-list data, wrap it
+        data_with_type = {'type': 'obd', 'data': data}
+    
+    data_json = json.dumps(data_with_type)
     message = f"data: {data_json}\n\n"
     
     with sse_lock:

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo } from 'react'
-import { MapContainer, TileLayer, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, useMap, Marker, Polyline, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import './Map.css'
 
@@ -52,7 +52,26 @@ function MapUpdater({ bounds, minZoom, maxZoom }) {
   return null
 }
 
-const Map = memo(function Map({ tileSource, onTileSourceChange }) {
+// Component to update map view when GPS position changes
+function VehicleTracker({ gpsData }) {
+  const map = useMap()
+  
+  useEffect(() => {
+    if (gpsData && Array.isArray(gpsData) && gpsData.length > 0) {
+      const latestPosition = gpsData[gpsData.length - 1]
+      if (latestPosition.latitude && latestPosition.longitude) {
+        map.setView([latestPosition.latitude, latestPosition.longitude], map.getZoom(), {
+          animate: true,
+          duration: 0.5
+        })
+      }
+    }
+  }, [map, gpsData])
+  
+  return null
+}
+
+const Map = memo(function Map({ tileSource, onTileSourceChange, gpsData }) {
   // Bounding box coordinates from ISO 19139 - memoized to prevent recalculation
   const bounds = useMemo(() => [
     [38.147370375, -122.468099716], // Southwest [lat, lng]
@@ -88,6 +107,28 @@ const Map = memo(function Map({ tileSource, onTileSourceChange }) {
   const mapStyle = useMemo(() => ({ height: '400px', width: '100%' }), [])
   const boundsOptions = useMemo(() => ({ padding: [20, 20] }), [])
 
+  // Extract GPS positions for marker and polyline
+  const vehiclePosition = useMemo(() => {
+    if (!gpsData || !Array.isArray(gpsData) || gpsData.length === 0) {
+      return null
+    }
+    const latest = gpsData[gpsData.length - 1]
+    if (latest.latitude && latest.longitude) {
+      return [latest.latitude, latest.longitude]
+    }
+    return null
+  }, [gpsData])
+
+  // Create polyline path from GPS data
+  const gpsPath = useMemo(() => {
+    if (!gpsData || !Array.isArray(gpsData) || gpsData.length < 2) {
+      return []
+    }
+    return gpsData
+      .filter(point => point.latitude && point.longitude)
+      .map(point => [point.latitude, point.longitude])
+  }, [gpsData])
+
   return (
     <div className="map-container">
       <div className="map-controls">
@@ -117,12 +158,42 @@ const Map = memo(function Map({ tileSource, onTileSourceChange }) {
           minZoom={tileSource === 'backend' ? 14 : undefined}
           maxZoom={tileSource === 'backend' ? 17 : undefined}
         />
+        <VehicleTracker gpsData={gpsData} />
         <TileLayer
           url={currentTileLayer.url}
           attribution={currentTileLayer.attribution}
           minZoom={currentTileLayer.minZoom}
           maxZoom={currentTileLayer.maxZoom}
         />
+        {gpsPath.length > 1 && (
+          <Polyline
+            positions={gpsPath}
+            pathOptions={{ color: '#e74c3c', weight: 3, opacity: 0.7 }}
+          />
+        )}
+        {vehiclePosition && (
+          <Marker position={vehiclePosition}>
+            <Popup>
+              <div>
+                <strong>Vehicle Position</strong>
+                {gpsData && gpsData.length > 0 && (
+                  <>
+                    <br />
+                    Lat: {gpsData[gpsData.length - 1].latitude.toFixed(6)}
+                    <br />
+                    Lng: {gpsData[gpsData.length - 1].longitude.toFixed(6)}
+                    {gpsData[gpsData.length - 1].speed !== undefined && (
+                      <>
+                        <br />
+                        Speed: {gpsData[gpsData.length - 1].speed} km/h
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        )}
       </MapContainer>
     </div>
   )
