@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import uPlot from 'uplot'
-import 'uplot/dist/uPlot.min.css'
+import { useState, useEffect } from 'react'
+import TelemetryChart from './TelemetryChart'
 import './App.css'
 
 function App() {
@@ -9,108 +8,6 @@ function App() {
   const [sseData, setSseData] = useState(null)
   const MAX_SSE_ENTRIES = 100 // Maximum number of entries to keep
   const [sseConnected, setSseConnected] = useState(false)
-  
-  // Chart refs and instances
-  const speedChartRef = useRef(null)
-  const rpmChartRef = useRef(null)
-  const coolantTempChartRef = useRef(null)
-  const throttleChartRef = useRef(null)
-  const engineLoadChartRef = useRef(null)
-  const fuelLevelChartRef = useRef(null)
-  
-  const speedChartInstance = useRef(null)
-  const rpmChartInstance = useRef(null)
-  const coolantTempChartInstance = useRef(null)
-  const throttleChartInstance = useRef(null)
-  const engineLoadChartInstance = useRef(null)
-  const fuelLevelChartInstance = useRef(null)
-
-  // Transform SSE data to uPlot format
-  const transformDataForChart = (dataArray, field) => {
-    if (!dataArray || dataArray.length === 0) {
-      return [[], []]
-    }
-    
-    const times = []
-    const values = []
-    
-    dataArray.forEach((item, index) => {
-      // Use index as time if no timestamp, or use actual timestamp if available
-      const time = item.timestamp ? new Date(item.timestamp).getTime() / 1000 : index
-      const value = item[field]
-      
-      if (value !== null && value !== undefined && !isNaN(value)) {
-        times.push(time)
-        values.push(value)
-      }
-    })
-    
-    return [times, values]
-  }
-
-  // Create or update a chart
-  const createOrUpdateChart = (chartRef, chartInstanceRef, dataArray, field, options) => {
-    if (!chartRef.current) return
-    
-    const [times, values] = transformDataForChart(dataArray, field)
-    
-    if (times.length === 0) return
-    
-    const chartData = [times, values]
-    
-    if (chartInstanceRef.current) {
-      // Update existing chart
-      chartInstanceRef.current.setData(chartData)
-    } else {
-      // Create new chart - use requestAnimationFrame to ensure DOM is ready
-      requestAnimationFrame(() => {
-        if (!chartRef.current) return
-        
-        const width = chartRef.current.offsetWidth || 600
-        const defaultOptions = {
-          width: width,
-          height: 200,
-          scales: {
-            x: {
-              time: true,
-            },
-          },
-          series: [
-            {},
-            {
-              label: options.label,
-              stroke: options.color || '#667eea',
-              width: 2,
-              points: {
-                show: false,
-              },
-            },
-          ],
-          axes: [
-            {
-              stroke: '#333',
-              grid: { show: true, stroke: '#e0e0e0', width: 1 },
-              ticks: { show: true, stroke: '#666' },
-            },
-            {
-              stroke: '#333',
-              grid: { show: true, stroke: '#e0e0e0', width: 1 },
-              ticks: { show: true, stroke: '#666' },
-              label: options.label,
-              labelSize: 12,
-              labelGap: 5,
-            },
-          ],
-        }
-        
-        try {
-          chartInstanceRef.current = new uPlot(defaultOptions, chartData, chartRef.current)
-        } catch (error) {
-          console.error(`Error creating chart for ${field}:`, error)
-        }
-      })
-    }
-  }
 
   // Set up Server-Sent Events connection
   useEffect(() => {
@@ -175,79 +72,6 @@ function App() {
     }
   }, [])
 
-  // Update charts when SSE data changes
-  useEffect(() => {
-    if (!sseData || !Array.isArray(sseData) || sseData.length === 0) return
-    
-    // Create or update each chart
-    createOrUpdateChart(speedChartRef, speedChartInstance, sseData, 'speed', {
-      label: 'Speed (km/h)',
-      color: '#667eea',
-    })
-    
-    createOrUpdateChart(rpmChartRef, rpmChartInstance, sseData, 'rpm', {
-      label: 'RPM',
-      color: '#e74c3c',
-    })
-    
-    createOrUpdateChart(coolantTempChartRef, coolantTempChartInstance, sseData, 'coolant_temp', {
-      label: 'Coolant Temp (°C)',
-      color: '#e67e22',
-    })
-    
-    createOrUpdateChart(throttleChartRef, throttleChartInstance, sseData, 'throttle', {
-      label: 'Throttle (%)',
-      color: '#2ecc71',
-    })
-    
-    createOrUpdateChart(engineLoadChartRef, engineLoadChartInstance, sseData, 'engine_load', {
-      label: 'Engine Load (%)',
-      color: '#9b59b6',
-    })
-    
-    createOrUpdateChart(fuelLevelChartRef, fuelLevelChartInstance, sseData, 'fuel_level', {
-      label: 'Fuel Level (%)',
-      color: '#3498db',
-    })
-  }, [sseData])
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const charts = [
-        { ref: speedChartRef, instance: speedChartInstance },
-        { ref: rpmChartRef, instance: rpmChartInstance },
-        { ref: coolantTempChartRef, instance: coolantTempChartInstance },
-        { ref: throttleChartRef, instance: throttleChartInstance },
-        { ref: engineLoadChartRef, instance: engineLoadChartInstance },
-        { ref: fuelLevelChartRef, instance: fuelLevelChartInstance },
-      ]
-      
-      charts.forEach(({ ref, instance }) => {
-        if (instance.current && ref.current) {
-          instance.current.setSize({
-            width: ref.current.offsetWidth || 600,
-            height: 200,
-          })
-        }
-      })
-    }
-    
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  // Cleanup charts on unmount
-  useEffect(() => {
-    return () => {
-      speedChartInstance.current?.destroy()
-      rpmChartInstance.current?.destroy()
-      coolantTempChartInstance.current?.destroy()
-      throttleChartInstance.current?.destroy()
-      engineLoadChartInstance.current?.destroy()
-      fuelLevelChartInstance.current?.destroy()
-    }
-  }, [])
 
   const sendTestData = async () => {
     try {
@@ -285,35 +109,53 @@ function App() {
           </div>
           
           <div className="charts-grid">
-            <div className="chart-container">
-              <h3>Speed</h3>
-              <div ref={speedChartRef} className="chart"></div>
-            </div>
+            <TelemetryChart
+              title="Speed"
+              data={sseData}
+              field="speed"
+              label="Speed (km/h)"
+              color="#667eea"
+            />
             
-            <div className="chart-container">
-              <h3>RPM</h3>
-              <div ref={rpmChartRef} className="chart"></div>
-            </div>
+            <TelemetryChart
+              title="RPM"
+              data={sseData}
+              field="rpm"
+              label="RPM"
+              color="#e74c3c"
+            />
             
-            <div className="chart-container">
-              <h3>Coolant Temperature</h3>
-              <div ref={coolantTempChartRef} className="chart"></div>
-            </div>
+            <TelemetryChart
+              title="Coolant Temperature"
+              data={sseData}
+              field="coolant_temp"
+              label="Coolant Temp (°C)"
+              color="#e67e22"
+            />
             
-            <div className="chart-container">
-              <h3>Throttle</h3>
-              <div ref={throttleChartRef} className="chart"></div>
-            </div>
+            <TelemetryChart
+              title="Throttle"
+              data={sseData}
+              field="throttle"
+              label="Throttle (%)"
+              color="#2ecc71"
+            />
             
-            <div className="chart-container">
-              <h3>Engine Load</h3>
-              <div ref={engineLoadChartRef} className="chart"></div>
-            </div>
+            <TelemetryChart
+              title="Engine Load"
+              data={sseData}
+              field="engine_load"
+              label="Engine Load (%)"
+              color="#9b59b6"
+            />
             
-            <div className="chart-container">
-              <h3>Fuel Level</h3>
-              <div ref={fuelLevelChartRef} className="chart"></div>
-            </div>
+            <TelemetryChart
+              title="Fuel Level"
+              data={sseData}
+              field="fuel_level"
+              label="Fuel Level (%)"
+              color="#3498db"
+            />
           </div>
           
           {sseData && sseData.length > 0 && (
