@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import TelemetryChart from './TelemetryChart'
+import Map from './Map'
 import { validateTelemetryData } from './telemetrySchema'
 import './App.css'
 
@@ -7,6 +8,7 @@ function App() {
   const [sseData, setSseData] = useState(null)
   const MAX_SSE_ENTRIES = 100 // Maximum number of entries to keep
   const [sseConnected, setSseConnected] = useState(false)
+  const [tileSource, setTileSource] = useState('backend')
 
   // Set up Server-Sent Events connection
   useEffect(() => {
@@ -80,6 +82,11 @@ function App() {
   return (
     <div className="app">
       <main className="app-main">
+        <div className="card map-card">
+          <h2>Track Map</h2>
+          <Map tileSource={tileSource} onTileSourceChange={setTileSource} />
+        </div>
+        
         <div className="card telemetry-card">
           <h2>Car Telemetry Dashboard</h2>
           <div className={`connection-status ${sseConnected ? 'connected' : 'disconnected'}`}>

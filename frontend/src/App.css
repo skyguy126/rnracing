@@ -125,6 +125,11 @@
   font-size: 1.1rem;
 }
 
+.map-card {
+  max-width: 1200px;
+  width: 100%;
+}
+
 .telemetry-card {
   max-width: 1200px;
   width: 100%;

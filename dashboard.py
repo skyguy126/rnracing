@@ -139,11 +139,27 @@ def serve_frontend():
     return send_from_directory(app.static_folder, 'index.html')
 
 
+@app.route("/tiles/<int:z>/<int:x>/<int:y>.png")
+def serve_tile(z, x, y):
+    """Serve map tiles from sonoma_raceway_tiles directory"""
+    tile_path = os.path.join('sonoma_raceway_tiles', str(z), str(x), f'{y}.png')
+    
+    if os.path.exists(tile_path) and os.path.isfile(tile_path):
+        return send_from_directory('sonoma_raceway_tiles', f'{z}/{x}/{y}.png', mimetype='image/png')
+    else:
+        logger.debug(f"Tile not found: {tile_path}")
+        return {"error": "Tile not found"}, 404
+
+
 @app.route("/<path:path>")
 def serve_static(path):
     """Serve static files from React build directory"""
     # Don't serve API routes as static files
     if path.startswith('api/'):
+        return {"error": "Not found"}, 404
+    
+    # Don't serve tiles through this route (handled by serve_tile)
+    if path.startswith('tiles/'):
         return {"error": "Not found"}, 404
     
     # Try to serve the file, fallback to index.html for client-side routing
