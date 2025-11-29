@@ -26,3 +26,9 @@ obdgpslogger-0.16.tar.gz
 
 # ground logs
 ground_station.log
+
+# Frontend build artifacts
+static/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

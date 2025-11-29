@@ -2,9 +2,10 @@ import os
 import json
 import logging
 from logging.handlers import RotatingFileHandler
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 
-app = Flask(__name__)
+# Configure Flask to serve static files from React build
+app = Flask(__name__, static_folder='static', static_url_path='')
 
 # Set up logging with best practices
 log_file = "ground_station.log"
@@ -41,11 +42,6 @@ root_logger.addHandler(console_handler)
 logger = logging.getLogger(__name__)
 
 
-@app.route("/")
-def hello_world():
-    return "hello world"
-
-
 @app.route("/data", methods=["POST"])
 def receive_data():
     try:
@@ -76,6 +72,35 @@ def receive_data():
             exc_info=True
         )
         return {"error": "Internal server error"}, 500
+
+
+@app.route("/")
+def serve_frontend():
+    """Serve the React frontend index.html"""
+    if not os.path.exists(os.path.join(app.static_folder, 'index.html')):
+        return {
+            "error": "Frontend not built",
+            "message": "Please run './build_frontend.sh' to build the React frontend"
+        }, 503
+    return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.route("/<path:path>")
+def serve_static(path):
+    """Serve static files from React build directory"""
+    # Don't serve API routes as static files
+    if path.startswith('api/'):
+        return {"error": "Not found"}, 404
+    
+    # Try to serve the file, fallback to index.html for client-side routing
+    file_path = os.path.join(app.static_folder, path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        # Fallback to index.html for client-side routing
+        if os.path.exists(os.path.join(app.static_folder, 'index.html')):
+            return send_from_directory(app.static_folder, 'index.html')
+        return {"error": "Frontend not built"}, 503
 
 
 def main():
