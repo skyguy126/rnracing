@@ -1,4 +1,3 @@
-# /home/rnracing/rnracing/launcher.py
 import pathlib
 import sys
 from typing import Optional
