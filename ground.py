@@ -1,13 +1,19 @@
-import time
+import os
+from flask import Flask
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def hello_world():
+    return "hello world"
+
 
 def main():
     print("Starting GROUND STATION logic...")
-    # TODO: replace with your ground station logic
-    # e.g. receive telemetry, log data, UI, etc.
-    
-    print("example ground 1")
-    time.sleep(10)
-    print("example ground 2")
+    port = int(os.getenv("PORT", 500))
+    print(f"Starting Flask web server on port {port}...")
+    app.run(host="0.0.0.0", port=port, debug=True)
 
 
 if __name__ == "__main__":

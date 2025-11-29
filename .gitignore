@@ -1,0 +1,18 @@
+# Local role file (dev mode)
+.role
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+.envrc
