@@ -1,0 +1,24 @@
+[Unit]
+Description=RnRacing Car/Ground Launcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rnracing
+WorkingDirectory=/home/rnracing/rnracing
+ExecStartPre=/bin/sleep 10
+ExecStart=/home/rnracing/.pyenv/shims/python /home/rnracing/rnracing/launcher.py
+
+Restart=always
+RestartSec=15
+
+Environment=PYTHONUNBUFFERED=1
+Environment=PYENV_ROOT=/home/rnracing/.pyenv
+Environment=PATH=/home/rnracing/.pyenv/shims:/home/rnracing/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

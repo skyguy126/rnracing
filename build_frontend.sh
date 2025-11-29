@@ -19,4 +19,3 @@ npm run build
 
 echo "Frontend build complete! Static files are in ../static/"
 cd ..
-

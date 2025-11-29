@@ -1,0 +1,30 @@
+[Unit]
+Description=RnRacing Dashboard Webserver
+After=network-online.target
+Wants=network-online.target
+
+# Only consider starting if the role file exists
+ConditionPathExists=/boot/pi_role
+
+[Service]
+Type=simple
+User=rnracing
+WorkingDirectory=/home/rnracing/rnracing
+
+# Only start if /boot/pi_role contains exactly "ground"
+ExecCondition=/usr/bin/grep -qx "ground" /boot/pi_role
+
+ExecStart=/home/rnracing/.pyenv/shims/python /home/rnracing/rnracing/dashboard.py
+
+Restart=always
+RestartSec=15
+
+Environment=PYTHONUNBUFFERED=1
+Environment=PYENV_ROOT=/home/rnracing/.pyenv
+Environment=PATH=/home/rnracing/.pyenv/shims:/home/rnracing/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
