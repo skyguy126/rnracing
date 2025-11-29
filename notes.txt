@@ -1,0 +1,10 @@
+# edit systemd config
+
+sudo nano /etc/systemd/system/rnracing.service
+
+systemctl enable rnracing.service
+systemctl start rnracing.service
+systemctl status rnracing.service
+
+# use -f for live logs
+journalctl -u rnracing.service -f

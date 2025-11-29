@@ -1,4 +1,3 @@
-# /home/rnracing/rnracing/launcher.py
 import pathlib
 import sys
 
@@ -14,6 +13,10 @@ def get_role() -> str:
 
 
 def main():
+
+    print("sys.executable:", sys.executable)
+    print("sys.version:", sys.version)
+
     role = get_role()
     print(f"[launcher] Detected role: {role!r}")
 
