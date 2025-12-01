@@ -60,6 +60,16 @@ def display_text(display, text):
     display.text(text, 0, 0, 1)
     display.show()
 
+
+def blank_display(display):
+    """Clear and, if available, power down the panel."""
+    if display is None:
+        return
+    display.fill(0)
+    display.show()
+    if hasattr(display, "poweroff"):
+        display.poweroff()
+
 def main():   
     # Create the I2C interface.
     i2c = busio.I2C(board.SCL, board.SDA)
@@ -99,26 +109,31 @@ def main():
     print("[CAR] Ready")
     time.sleep(1)
 
-    # main loop
-    while True:
-        # TODO: collect:
-        # - gps data
-        # - obd data
-        # - ocr tire gauge
+    try:
+        # main loop
+        while True:
+            # TODO: collect:
+            # - gps data
+            # - obd data
+            # - ocr tire gauge
 
-        lat, lon = fetch_gps_coordinates()
-        print(f"[GPS] fix lat={lat}, lon={lon}")
+            lat, lon = fetch_gps_coordinates()
+            print(f"[GPS] fix lat={lat}, lon={lon}")
 
-        display_text(display, "[CAR] Transmitting...")
+            display_text(display, "[CAR] Transmitting...")
 
-        payload = bytes("test\r\n","utf-8")
-        rfm9x.send(payload)
+            payload = bytes("test\r\n","utf-8")
+            rfm9x.send(payload)
 
-        time.sleep(1)
+            time.sleep(1)
 
-        display_text(display, "[CAR] Ready")
+            display_text(display, "[CAR] Ready")
 
-        time.sleep(1)
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("[CAR] Shutdown requested by user, blanking display.")
+    finally:
+        blank_display(display)
 
 if __name__ == "__main__":
     main()
