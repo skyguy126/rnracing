@@ -37,9 +37,15 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.25rem;
   border-bottom: 1px solid var(--line);
   padding-bottom: 0.85rem;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .brand {
@@ -67,6 +73,87 @@ body {
 }
 .link.offline {
   color: var(--offline);
+}
+
+.capture {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(196, 241, 53, 0.06), transparent 55%);
+}
+
+.capture-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid rgba(232, 240, 226, 0.28);
+  background: rgba(26, 34, 24, 0.9);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.7rem 1.15rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.capture-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.capture-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.capture-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 0 transparent;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.capture-btn.recording {
+  border-color: var(--offline);
+  color: #ffd0d0;
+  background: rgba(196, 92, 92, 0.12);
+}
+
+.capture-btn.recording .capture-dot {
+  background: var(--offline);
+  animation: capture-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes capture-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(196, 92, 92, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 0.45rem rgba(196, 92, 92, 0);
+  }
+}
+
+.capture-meta {
+  display: flex;
+  gap: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.capture-stat {
+  min-width: 5.5rem;
 }
 
 .hero-metrics {

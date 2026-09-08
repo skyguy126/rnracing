@@ -59,3 +59,16 @@ set LORA_PORT=COM5&& npm start            # Windows cmd
 - Car → base only (this side never transmits telemetry commands).
 - If the car or USB dongle power-cycles, the service keeps running and reopens the serial port.
 - Dashboard link states: `listening` → `live` → `stale` → `offline`.
+- **Start capture / Stop capture** buffers live telemetry in the browser; stopping downloads a CSV (`iso_time`, seq, GPS, OBD fields).
+
+## Dual-dongle laptop test
+
+With both radios on this machine, set `LORA_PORT` explicitly so TX and RX do not claim the same device. Fake car TX:
+
+```bash
+python3 ../car/list_ports.py
+LORA_PORT=/dev/ttyUSB0 python3 ../car/sim_transmit.py   # other terminal
+LORA_PORT=/dev/ttyUSB1 npm start
+```
+
+See `car/README.md` for the full steps.

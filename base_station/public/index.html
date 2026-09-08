@@ -9,8 +9,21 @@
   <body>
     <header class="top">
       <div class="brand">RN Racing</div>
-      <div id="link" class="link offline">offline</div>
+      <div class="top-actions">
+        <div id="link" class="link offline">offline</div>
+      </div>
     </header>
+
+    <section class="capture" aria-label="CSV capture">
+      <button type="button" id="captureBtn" class="capture-btn" aria-pressed="false">
+        <span class="capture-dot" aria-hidden="true"></span>
+        <span id="captureLabel">Start capture</span>
+      </button>
+      <div class="capture-meta">
+        <span id="captureRows" class="capture-stat">0 rows</span>
+        <span id="captureElapsed" class="capture-stat">00:00</span>
+      </div>
+    </section>
 
     <section class="hero-metrics">
       <div class="metric primary">

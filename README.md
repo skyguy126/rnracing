@@ -24,3 +24,5 @@ Fields are omitted when a sensor is temporarily unavailable. Either side may pow
 **Car (Pi):** see `car/README.md` — install systemd service, then optionally `harden_sdcard.sh`.
 
 **Base station (laptop):** see `base_station/README.md` — `npm install && npm start`, open http://localhost:3000.
+
+**Dual-radio laptop test (no OBD/GPS):** `python3 car/sim_transmit.py` on one dongle + base station on the other — see `car/README.md`.
