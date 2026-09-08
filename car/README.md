@@ -32,11 +32,22 @@ journalctl -u rnr-car.service -f
 
 ## Power-loss hardening
 
-After the service is working, harden the SD card:
+After the service is working:
 
 ```bash
 sudo bash harden_sdcard.sh
 sudo reboot
+sudo bash harden_sdcard.sh --status
+```
+
+Before installing updates or changing configs:
+
+```bash
+sudo bash unharden_sdcard.sh
+sudo reboot
+# if prompted, run unharden again after reboot
+# … make changes …
+sudo bash harden_sdcard.sh && sudo reboot
 ```
 
 ## LoRa notes
