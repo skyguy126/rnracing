@@ -9,6 +9,9 @@ cd base_station
 npm install
 npm start -- --freq 915 --lora-port /dev/ttyUSB1
 # Windows: npm start -- --freq 915 --lora-port COM5
+
+# no USB dongle — fake telemetry (GPS walks in a circle)
+npm run sim
 ```
 
 Open **http://localhost:3000**
@@ -20,6 +23,7 @@ npm run list-ports
 
 | Flag | Default | Meaning |
 |------|---------|---------|
+| `--sim` | off | Fake telemetry; no USB LoRa (GPS circle) |
 | `--freq` | `915` | `868` or `915` — programs LoRa via AT |
 | `--lora-port` | auto | USB-TO-LoRa device |
 | `--port` | `3000` | HTTP dashboard port |

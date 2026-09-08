@@ -12,6 +12,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { SerialPort } from "serialport";
 import { ReadlineParser } from "@serialport/parser-readline";
+import { nextSimTelemetry } from "./sim_telemetry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +25,7 @@ const LORA_PWR_DEFAULT = 22;
 
 function parseArgs(argv) {
   const out = {
+    sim: false,
     freq: 915,
     pwr: LORA_PWR_DEFAULT,
     port: 3000,
@@ -31,6 +33,7 @@ function parseArgs(argv) {
     loraBaud: 115200,
     reconnectMs: 2000,
     staleMs: 5000,
+    intervalMs: 1000,
   };
 
   const take = (i) => {
@@ -43,20 +46,24 @@ function parseArgs(argv) {
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--freq") out.freq = Number(take(i++));
+    if (a === "--sim") out.sim = true;
+    else if (a === "--freq") out.freq = Number(take(i++));
     else if (a === "--pwr") out.pwr = Number(take(i++));
     else if (a === "--lora-port") out.loraPort = take(i++);
     else if (a === "--lora-baud") out.loraBaud = Number(take(i++));
     else if (a === "--port") out.port = Number(take(i++));
     else if (a === "--reconnect-ms") out.reconnectMs = Number(take(i++));
     else if (a === "--stale-ms") out.staleMs = Number(take(i++));
+    else if (a === "--interval-ms") out.intervalMs = Number(take(i++));
     else if (a === "--help" || a === "-h") {
       console.log(`Usage: node server.js [options]
+  --sim                Fake telemetry (no USB LoRa); GPS walks in a circle
   --freq 868|915       LoRa band (default: 915)
   --pwr 10-22          TX power dBm (default: 22); SF=10 BW=125k CR=4/5 fixed
   --lora-port PATH     USB-TO-LoRa device (default: auto)
   --lora-baud N        USB baud (default: 115200)
   --port N             HTTP dashboard port (default: 3000)
+  --interval-ms N      Sim tick ms (default: 1000)
   --reconnect-ms N     Serial reopen delay (default: 2000)
   --stale-ms N         UI stale threshold (default: 5000)`);
       process.exit(0);
@@ -83,6 +90,8 @@ const LORA_PORT = args.loraPort;
 const LORA_BAUD = args.loraBaud;
 const RECONNECT_MS = args.reconnectMs;
 const STALE_MS = args.staleMs;
+const SIM_INTERVAL_MS = args.intervalMs;
+const SIM_MODE = args.sim;
 const FREQ_MHZ = args.freq;
 const FREQ_CH = FREQ_CHANNELS[FREQ_MHZ];
 const LORA_PWR = args.pwr;
@@ -145,7 +154,10 @@ function handleLine(line) {
     return;
   }
   if (!msg || typeof msg !== "object") return;
+  ingestTelemetry(msg);
+}
 
+function ingestTelemetry(msg) {
   lastRxAt = Date.now();
   latest = { ...msg, _rxAt: lastRxAt };
   broadcast({ type: "telemetry", data: latest });
@@ -154,6 +166,20 @@ function handleLine(line) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+async function simLoop() {
+  serialOpen = true;
+  serialPath = "sim";
+  broadcast(statusSnapshot());
+  console.log(`[base] sim harness on (circular GPS, random OBD) every ${SIM_INTERVAL_MS}ms`);
+  const t0 = Date.now();
+  let seq = 0;
+  for (;;) {
+    ingestTelemetry(nextSimTelemetry(seq, t0));
+    seq = (seq + 1) >>> 0;
+    await sleep(SIM_INTERVAL_MS);
+  }
 }
 
 function writeLine(port, line) {
@@ -324,7 +350,12 @@ app.get("/events", (req, res) => {
 });
 
 app.listen(HTTP_PORT, () => {
-  console.log(`[base] dashboard http://localhost:${HTTP_PORT}  freq=${FREQ_MHZ} MHz (ch ${FREQ_CH}) SF=${LORA_SF} pwr=${LORA_PWR}dBm`);
-  serialLoop();
+  if (SIM_MODE) {
+    console.log(`[base] dashboard http://localhost:${HTTP_PORT}  mode=sim`);
+    simLoop();
+  } else {
+    console.log(`[base] dashboard http://localhost:${HTTP_PORT}  freq=${FREQ_MHZ} MHz (ch ${FREQ_CH}) SF=${LORA_SF} pwr=${LORA_PWR}dBm`);
+    serialLoop();
+  }
   setInterval(() => broadcast(statusSnapshot()), 1000);
 });

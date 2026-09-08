@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "sim": "node server.js --sim",
     "list-ports": "node list-ports.js"
   },
   "dependencies": {
