@@ -4,13 +4,61 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RN Racing — Base Station</title>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="top">
       <div class="brand">RN Racing</div>
+      <div class="top-mid">
+        <div class="clock" aria-live="off">
+          <div id="clock12" class="clock-12">—</div>
+          <div id="clock24" class="clock-24">—</div>
+        </div>
+        <div class="weather" id="weather">
+          <div class="weather-primary">
+            <div id="weatherIcon" class="weather-icon" aria-hidden="true"></div>
+            <div class="weather-primary-text">
+              <div id="weatherMain" class="weather-main">Weather…</div>
+              <div id="weatherSub" class="weather-sub">fetching today</div>
+            </div>
+          </div>
+          <div class="weather-metrics">
+            <div class="wx-stat">
+              <svg class="wx-glyph" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+                <path d="M12 2.5C12 2.5 5.5 10.2 5.5 14.2a6.5 6.5 0 0 0 13 0C18.5 10.2 12 2.5 12 2.5z"/>
+              </svg>
+              <span id="weatherHum">—</span>
+            </div>
+            <div class="wx-stat">
+              <svg class="wx-glyph" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+                <path d="M8 3.5c0 0-3.2 4.2-3.2 6.4a3.2 3.2 0 1 0 6.4 0C11.2 7.7 8 3.5 8 3.5zm8 4c0 0-2.8 3.6-2.8 5.5a2.8 2.8 0 1 0 5.6 0c0-1.9-2.8-5.5-2.8-5.5z"/>
+              </svg>
+              <span id="weatherPrecip">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="top-actions">
-        <div id="link" class="link offline">offline</div>
+        <label class="interp-toggle" for="interpToggle">
+          <input type="checkbox" id="interpToggle" />
+          <span>Interpolate</span>
+        </label>
+        <button type="button" id="resetBtn" class="reset-btn">Reset</button>
+        <div class="link-wrap">
+          <div
+            id="link"
+            class="link offline"
+            tabindex="0"
+            aria-describedby="linkTip"
+          >offline</div>
+          <div id="linkTip" class="link-tip" role="tooltip">
+            <div><span class="tip-live">live</span> — receiving fresh telemetry</div>
+            <div><span class="tip-listening">listening</span> — radio open, waiting for data</div>
+            <div><span class="tip-stale">stale</span> — last packet aged out</div>
+            <div><span class="tip-offline">offline</span> — no serial / disconnected</div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -28,7 +76,7 @@
     <section class="hero-metrics">
       <div class="metric primary">
         <div class="label">Speed</div>
-        <div class="value"><span id="speed">—</span><span class="unit">km/h</span></div>
+        <div class="value"><span id="speed">—</span><span class="unit">mph</span></div>
       </div>
       <div class="metric primary">
         <div class="label">RPM</div>
@@ -55,6 +103,39 @@
       </div>
     </section>
 
+    <section class="side-panels" aria-label="Check engine and lap timer">
+      <div class="side-panel mil-panel">
+        <div class="mil-body">
+          <div class="mil-aside">
+            <div class="panel-title">Check engine</div>
+            <div id="milIcon" class="mil-icon" aria-hidden="true"></div>
+          </div>
+          <div id="dtcList" class="dtc-list" aria-label="Diagnostic codes"></div>
+        </div>
+      </div>
+
+      <div class="side-panel lap-panel">
+        <div class="panel-title">Lap timer</div>
+        <div id="lapDisplay" class="lap-display">00:00.00</div>
+        <div class="lap-actions">
+          <button type="button" id="lapStartBtn" class="lap-btn">Start</button>
+          <button type="button" id="lapStopBtn" class="lap-btn">Stop</button>
+          <button type="button" id="lapLapBtn" class="lap-btn">Lap</button>
+          <button type="button" id="lapResetBtn" class="lap-btn">Reset</button>
+        </div>
+        <div id="lapList" class="lap-list"></div>
+      </div>
+    </section>
+
+    <section class="map-section" aria-label="Track map">
+      <div class="map-head">
+        <div class="label">Path</div>
+        <button type="button" id="resetViewBtn" class="reset-btn reset-view-btn">Reset view</button>
+      </div>
+      <div id="map" class="map"></div>
+      <div id="mapNote" class="map-note" hidden></div>
+    </section>
+
     <section class="meta">
       <div><span class="k">GPS</span> <span id="gps">—</span></div>
       <div><span class="k">Seq</span> <span id="seq">—</span></div>
@@ -62,6 +143,7 @@
       <div><span class="k">Port</span> <span id="port">—</span></div>
     </section>
 
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

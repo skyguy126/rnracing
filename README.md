@@ -16,8 +16,9 @@ python3 transmit.py --sim --freq 915 --pwr 22 --lora-port /dev/ttyUSB0
 # --- base_station ---
 cd base_station
 npm install
-npm start -- --freq 915 --pwr 22 --lora-port /dev/ttyUSB1   # real LoRa RX
-npm run sim                                                 # no USB; circular GPS
+npm start -- --freq 915 --pwr 22 --lora-port /dev/ttyUSB1
+npm run sim
+# put MAPBOX_TOKEN=pk… in base_station/.env (see .env.example)
 # open http://localhost:3000
 ```
 
@@ -35,7 +36,7 @@ Tire-pressure / OCR gauge support from Season 1 plans is **not** included.
 Newline-delimited JSON over LoRa **stream (transparent) mode**, 115200 8N1. Example:
 
 ```json
-{"type":"tel","seq":42,"ts":1725800000,"lat":38.16123,"lon":-122.45456,"speed":120,"rpm":6500,"coolant_temp":92,"throttle":55,"engine_load":70,"fuel_level":40}
+{"type":"tel","seq":42,"ts":1725800000,"lat":38.16123,"lon":-122.45456,"speed":75,"rpm":6500,"coolant_temp":92,"throttle":55,"engine_load":70,"fuel_level":40,"mil":true,"dtcs":[{"code":"P0301","desc":"Cylinder 1 Misfire Detected"}]}
 ```
 
-Fields are omitted when a sensor is temporarily unavailable. Either side may power-cycle at any time; both ends reconnect without exiting.
+`speed` is mph (OBD km/h and GPS knots are converted on the car before TX). `mil` / `dtcs` come from OBD `STATUS` + `GET_DTC` (polled every ~5s on the car). Fields are omitted when a sensor is temporarily unavailable. Either side may power-cycle at any time; both ends reconnect without exiting.

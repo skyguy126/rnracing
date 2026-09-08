@@ -9,12 +9,38 @@
 
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { SerialPort } from "serialport";
 import { ReadlineParser } from "@serialport/parser-readline";
 import { nextSimTelemetry } from "./sim_telemetry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function loadEnvFile(filePath) {
+  try {
+    const text = fs.readFileSync(filePath, "utf8");
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const i = line.indexOf("=");
+      if (i < 0) continue;
+      const key = line.slice(0, i).trim();
+      let val = line.slice(i + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      if (key && process.env[key] === undefined) process.env[key] = val;
+    }
+  } catch {
+    /* no .env is fine */
+  }
+}
+
+loadEnvFile(path.join(__dirname, ".env"));
 
 /** HF: freq_MHz = 850 + channel → 868→18, 915→65 (915 is in US 902–928) */
 const FREQ_CHANNELS = { 868: 18, 915: 65 };
@@ -65,7 +91,8 @@ function parseArgs(argv) {
   --port N             HTTP dashboard port (default: 3000)
   --interval-ms N      Sim tick ms (default: 1000)
   --reconnect-ms N     Serial reopen delay (default: 2000)
-  --stale-ms N         UI stale threshold (default: 5000)`);
+  --stale-ms N         UI stale threshold (default: 5000)
+  Mapbox token: set MAPBOX_TOKEN in base_station/.env`);
       process.exit(0);
     } else {
       console.error(`[base] unknown argument: ${a}`);
@@ -95,6 +122,7 @@ const SIM_MODE = args.sim;
 const FREQ_MHZ = args.freq;
 const FREQ_CH = FREQ_CHANNELS[FREQ_MHZ];
 const LORA_PWR = args.pwr;
+const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || "";
 const CH343_VID = 0x1a86;
 
 /** @type {import('express').Response[]} */
@@ -104,6 +132,52 @@ let lastRxAt = 0;
 let serialPath = null;
 let serialOpen = false;
 let programmedPath = null;
+
+/** Last-known MIL / DTCs; survive packets that omit these fields. */
+let stickyMil = false;
+/** @type {{ code: string, desc: string, arrivedAt: number }[]} */
+let stickyDtcs = [];
+
+function normalizeDtcItem(item) {
+  if (typeof item === "string") return { code: item, desc: "" };
+  if (!item || typeof item !== "object") return null;
+  const code = item.code != null ? String(item.code) : "";
+  if (!code) return null;
+  return { code, desc: item.desc != null ? String(item.desc) : "" };
+}
+
+function applyStickyDtcs(msg) {
+  const hasMil = Object.prototype.hasOwnProperty.call(msg, "mil");
+  const hasDtcs = Object.prototype.hasOwnProperty.call(msg, "dtcs");
+
+  if (!hasMil && !hasDtcs) {
+    if (!stickyMil && stickyDtcs.length === 0) return msg;
+    return { ...msg, mil: stickyMil, dtcs: stickyDtcs };
+  }
+
+  const rawList = hasDtcs && Array.isArray(msg.dtcs) ? msg.dtcs : [];
+  const parsed = rawList.map(normalizeDtcItem).filter(Boolean);
+  const milOn = (hasMil ? Boolean(msg.mil) : false) || parsed.length > 0;
+
+  if (!milOn) {
+    // Keep sticky codes even when the car/sim reports clear
+    return { ...msg, mil: stickyMil, dtcs: stickyDtcs };
+  }
+
+  const prev = new Map(stickyDtcs.map((d) => [d.code, d]));
+  const now = Date.now();
+  for (const d of parsed) {
+    const old = prev.get(d.code);
+    prev.set(d.code, {
+      code: d.code,
+      desc: d.desc || old?.desc || "",
+      arrivedAt: old?.arrivedAt || now,
+    });
+  }
+  stickyDtcs = [...prev.values()];
+  stickyMil = true;
+  return { ...msg, mil: true, dtcs: stickyDtcs };
+}
 
 function broadcast(obj) {
   const payload = `data: ${JSON.stringify(obj)}\n\n`;
@@ -159,7 +233,7 @@ function handleLine(line) {
 
 function ingestTelemetry(msg) {
   lastRxAt = Date.now();
-  latest = { ...msg, _rxAt: lastRxAt };
+  latest = { ...applyStickyDtcs(msg), _rxAt: lastRxAt };
   broadcast({ type: "telemetry", data: latest });
   broadcast(statusSnapshot());
 }
@@ -325,6 +399,10 @@ async function serialLoop() {
 
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/api/config", (_req, res) => {
+  res.json({ mapboxToken: MAPBOX_TOKEN || null });
+});
 
 app.get("/api/status", (_req, res) => {
   res.json({ ...statusSnapshot(), latest });

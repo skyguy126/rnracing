@@ -24,6 +24,19 @@ export function nextSimTelemetry(seq, t0) {
   const lon =
     CENTER_LON +
     (RADIUS_LAT * Math.sin(angle)) / Math.cos((CENTER_LAT * Math.PI) / 180);
+  // DTCs: off until 10s, then 15s on / 60s off
+  let mil = false;
+  let dtcs = [];
+  if (t >= 10) {
+    const u = (t - 10) % 75;
+    if (u < 15) {
+      mil = true;
+      dtcs = [
+        { code: "P0301", desc: "Cylinder 1 Misfire Detected" },
+        { code: "P0420", desc: "Catalyst System Efficiency Below Threshold" },
+      ];
+    }
+  }
 
   return {
     type: "tel",
@@ -31,11 +44,13 @@ export function nextSimTelemetry(seq, t0) {
     ts: Math.floor(Date.now() / 1000),
     lat: Number(lat.toFixed(6)),
     lon: Number(lon.toFixed(6)),
-    speed: Number(rand(40, 160).toFixed(2)),
+    speed: Number(rand(25, 100).toFixed(2)),
     rpm: Number(rand(1500, 7000).toFixed(2)),
     coolant_temp: Number(rand(75, 105).toFixed(2)),
     throttle: Number(rand(5, 95).toFixed(2)),
     engine_load: Number(rand(20, 90).toFixed(2)),
     fuel_level: Number(Math.max(5, 80 - t / 90 + rand(-1, 1)).toFixed(2)),
+    mil,
+    dtcs,
   };
 }

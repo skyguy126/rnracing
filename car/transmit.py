@@ -38,6 +38,9 @@ LORA_CR_AT = 1  # 1 = 4/5
 LORA_BW_HZ = 125_000
 LORA_PWR_DEFAULT = 22
 
+# Protocol `speed` is mph. python-obd SPEED is km/h; NMEA RMC speed is knots.
+KMH_TO_MPH = 0.621371
+KNOTS_TO_MPH = 1.852 * KMH_TO_MPH
 
 
 def log(msg: str) -> None:
@@ -102,7 +105,7 @@ def configure_lora_freq(ser: serial.Serial, mhz: int, pwr: int = LORA_PWR_DEFAUL
 
 
 def estimate_payload_bytes() -> int:
-    """Byte length of a full telemetry line as produced by this program."""
+    """Typical full telemetry line length (sensors + empty MIL fields)."""
     sample = {
         "type": "tel",
         "seq": 999999,
@@ -115,8 +118,76 @@ def estimate_payload_bytes() -> int:
         "throttle": 55.55,
         "engine_load": 70.25,
         "fuel_level": 40.15,
+        "mil": False,
+        "dtcs": [],
     }
     return len(json.dumps(sample, separators=(",", ":")) + "\n")
+
+
+def estimate_payload_bytes_with_dtcs(n_codes: int = 6) -> int:
+    """Worst-case line after packing: all sensors + mil + code-only DTCs."""
+    sample = {
+        "type": "tel",
+        "seq": 999999,
+        "ts": 1725800000,
+        "lat": 38.161234,
+        "lon": -122.454567,
+        "speed": 120.55,
+        "rpm": 6500.25,
+        "coolant_temp": 92.25,
+        "throttle": 55.55,
+        "engine_load": 70.25,
+        "fuel_level": 40.15,
+        "mil": True,
+        "dtcs": [{"code": f"P0{i:03d}"} for i in range(n_codes)],
+    }
+    return len(pack_telemetry_line(sample).encode("utf-8"))
+
+
+def pack_telemetry_line(payload: dict, max_bytes: int = 240) -> str:
+    """
+    Build a LoRa JSON line ≤ max_bytes.
+
+    DTC descriptions are never sent over the air (codes only). If still over
+    budget, drop secondary OBD fields, then cap the DTC list.
+    """
+    body = dict(payload)
+    if "dtcs" in body:
+        codes = []
+        for item in body.get("dtcs") or []:
+            if isinstance(item, dict) and item.get("code"):
+                codes.append({"code": str(item["code"])})
+            elif isinstance(item, str) and item:
+                codes.append({"code": item})
+        body["dtcs"] = codes
+
+    def dumps(obj: dict) -> str:
+        return json.dumps(obj, separators=(",", ":")) + "\n"
+
+    line = dumps(body)
+    if len(line) <= max_bytes:
+        return line
+
+    # Drop secondary sensors; keep core drive + MIL/codes
+    for key in ("coolant_temp", "throttle", "engine_load", "fuel_level"):
+        body.pop(key, None)
+        line = dumps(body)
+        if len(line) <= max_bytes:
+            return line
+
+    # Cap DTC count
+    if body.get("dtcs"):
+        for n in (4, 2, 1, 0):
+            body["dtcs"] = body["dtcs"][:n]
+            if n == 0:
+                body.pop("dtcs", None)
+            line = dumps(body)
+            if len(line) <= max_bytes:
+                return line
+
+    # Last resort: core fields only
+    core = {k: body[k] for k in ("type", "seq", "ts", "lat", "lon", "speed", "rpm", "mil") if k in body}
+    return dumps(core)
 
 
 def lora_airtime_s(payload_bytes: int, sf: int = LORA_SF, bw_hz: int = LORA_BW_HZ) -> float:
@@ -137,16 +208,22 @@ def tx_guard_s() -> float:
 
 def log_link_budget(pwr: int, interval: float) -> None:
     pl = estimate_payload_bytes()
+    pl_dtc = estimate_payload_bytes_with_dtcs(6)
     t_air = lora_airtime_s(pl)
+    t_air_dtc = lora_airtime_s(pl_dtc)
     t_gap = tx_guard_s()
     min_period = t_air + t_gap
+    min_period_dtc = t_air_dtc + t_gap
     period = max(interval, min_period)
+    period_dtc = max(interval, min_period_dtc)
     max_pps = 1.0 / t_air
     sust_pps = 1.0 / min_period
     log(
-        f"link SF{LORA_SF}/125k/4/5 pwr={pwr}dBm | payload={pl}B | "
-        f"airtime={t_air * 1000:.0f}ms | max≈{max_pps:.2f} pkt/s | "
-        f"sustainable≈{sust_pps:.2f} pkt/s | tx period={period:.2f}s (non-overlapping)"
+        f"link SF{LORA_SF}/125k/4/5 pwr={pwr}dBm | payload≈{pl}B "
+        f"(with DTCs≤{pl_dtc}B after pack) | "
+        f"airtime={t_air * 1000:.0f}ms / {t_air_dtc * 1000:.0f}ms w/ DTCs | "
+        f"max≈{max_pps:.2f} pkt/s | sustainable≈{sust_pps:.2f} pkt/s | "
+        f"tx period≥{period:.2f}s (DTCs≥{period_dtc:.2f}s, non-overlapping)"
     )
 
 
@@ -188,7 +265,7 @@ def read_gps_fix(ser: serial.Serial, deadline: float) -> dict:
         out["lon"] = round(lon, 6)
         if len(parts) > 7 and parts[7]:
             try:
-                out["gps_speed"] = round(float(parts[7]) * 1.852, 1)
+                out["gps_speed"] = round(float(parts[7]) * KNOTS_TO_MPH, 1)
             except ValueError:
                 pass
         return out
@@ -219,7 +296,7 @@ def connect_obd(*, sim: bool, obd_port: Optional[str], obd_baud: Optional[int]):
     return None
 
 
-def read_obd(conn, *, sim: bool) -> dict:
+def read_obd(conn, *, sim: bool, include_dtc: bool = False) -> dict:
     data = {}
     if conn is None or not conn.is_connected():
         return data
@@ -243,9 +320,41 @@ def read_obd(conn, *, sim: bool) -> dict:
         try:
             resp = conn.query(cmd)
             if resp.value is not None:
-                data[key] = round(float(resp.value.magnitude), 2)
+                val = float(resp.value.magnitude)
+                if key == "speed":
+                    val *= KMH_TO_MPH  # python-obd / obd_sim: km/h → mph
+                data[key] = round(val, 2)
         except Exception:
             pass
+
+    if include_dtc:
+        mil = False
+        dtcs = []
+        try:
+            st = conn.query(commands.STATUS)
+            if st.value is not None:
+                mil = bool(getattr(st.value, "MIL", False))
+        except Exception:
+            pass
+        try:
+            resp = conn.query(commands.GET_DTC)
+            if resp.value:
+                for item in resp.value:
+                    if isinstance(item, (list, tuple)) and item:
+                        code = str(item[0])
+                        desc = str(item[1]) if len(item) > 1 else ""
+                        dtcs.append({"code": code, "desc": desc})
+                    elif item:
+                        dtcs.append({"code": str(item), "desc": ""})
+        except Exception:
+            pass
+        if mil or dtcs:
+            data["mil"] = True
+            data["dtcs"] = dtcs
+        else:
+            data["mil"] = False
+            data["dtcs"] = []
+
     return data
 
 
@@ -258,6 +367,8 @@ def main(args: argparse.Namespace) -> None:
     gps: Optional[serial.Serial] = None
     obd_conn = None
     next_obd_try = 0.0
+    next_dtc_poll = 0.0
+    cached_dtc = {"mil": False, "dtcs": []}
     seq = 0
     lora_programmed_port: Optional[str] = None
 
@@ -320,7 +431,17 @@ def main(args: argparse.Namespace) -> None:
 
         if obd_conn is not None:
             try:
-                payload.update(read_obd(obd_conn, sim=args.sim))
+                want_dtc = loop_start >= next_dtc_poll
+                payload.update(read_obd(obd_conn, sim=args.sim, include_dtc=want_dtc))
+                if want_dtc:
+                    cached_dtc = {
+                        "mil": bool(payload.get("mil", False)),
+                        "dtcs": payload.get("dtcs") or [],
+                    }
+                    next_dtc_poll = loop_start + 5.0
+                else:
+                    payload["mil"] = cached_dtc["mil"]
+                    payload["dtcs"] = cached_dtc["dtcs"]
             except Exception as exc:
                 log(f"OBD read error: {exc}")
                 try:
@@ -335,12 +456,7 @@ def main(args: argparse.Namespace) -> None:
         else:
             payload.pop("gps_speed", None)
 
-        line = json.dumps(payload, separators=(",", ":")) + "\n"
-        if len(line) > 240:
-            line = json.dumps(
-                {k: payload[k] for k in ("type", "seq", "ts", "lat", "lon", "speed", "rpm") if k in payload},
-                separators=(",", ":"),
-            ) + "\n"
+        line = pack_telemetry_line(payload)
 
         try:
             line_bytes = line.encode("utf-8")
@@ -359,7 +475,7 @@ def main(args: argparse.Namespace) -> None:
             time.sleep(args.reconnect)
             continue
 
-        # Pace on actual airtime so SF10 packets never overlap on the channel
+        # Pace on this packet's airtime so larger MIL/DTC frames never overlap
         min_period = lora_airtime_s(len(line_bytes)) + tx_guard_s()
         period = max(args.interval, min_period)
         delay = period - (time.time() - loop_start)
