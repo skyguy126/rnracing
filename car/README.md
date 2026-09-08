@@ -9,65 +9,50 @@ cd car
 sudo bash install_service.sh
 ```
 
-That installs Python deps and enables `rnr-car.service` (auto-restart on boot / crash).
-
-Set serial paths (recommended via `/dev/serial/by-id/...`) by editing the unit or dropping an env file:
+That installs Python deps and enables `rnr-car.service`. Edit the unit `ExecStart=` flags for your ports (prefer `/dev/serial/by-id/...`):
 
 ```bash
-sudo systemctl edit rnr-car.service
+sudo systemctl edit --full rnr-car.service
 ```
 
-```ini
-[Service]
-Environment=LORA_PORT=/dev/serial/by-id/usb-...-LoRa
-Environment=GPS_PORT=/dev/serial/by-id/usb-...-GPS
-Environment=OBD_PORT=/dev/serial/by-id/usb-...-OBD
+```text
+ExecStart=/usr/bin/python3 .../transmit.py --freq 915 \
+  --lora-port /dev/serial/by-id/...-LoRa \
+  --gps-port /dev/serial/by-id/...-GPS \
+  --obd-port /dev/serial/by-id/...-OBD
 ```
-
-Logs:
 
 ```bash
 journalctl -u rnr-car.service -f
 ```
 
+## Flags
+
+```bash
+python3 transmit.py --help
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--freq` | `915` | `868` or `915` — programs LoRa via AT |
+| `--lora-port` | auto CH343 | USB-TO-LoRa device |
+| `--gps-port` | off | GPS serial device |
+| `--obd-port` | auto | OBD adapter (ignored with `--sim`) |
+| `--sim` | off | Use `obd_sim` instead of a real OBD adapter |
+| `--interval` | `1` | TX period (seconds) |
+
 ## Power-loss hardening
 
-After the service is working:
-
 ```bash
-sudo bash harden_sdcard.sh
-sudo reboot
-sudo bash harden_sdcard.sh --status
-```
-
-Before installing updates or changing configs:
-
-```bash
-sudo bash unharden_sdcard.sh
-sudo reboot
-# if prompted, run unharden again after reboot
-# … make changes …
 sudo bash harden_sdcard.sh && sudo reboot
+# before updates:
+sudo bash unharden_sdcard.sh && sudo reboot
 ```
 
-## LoRa notes
-
-Module is TX-only from software’s perspective. Configure AT parameters once to match the base station (see `base_station/README.md`). Default stream mode at 115200 baud; payload is one JSON line per second, kept ≤240 bytes when possible (SX1262 single-packet size).
-
-## Laptop dual-radio test (fake OBD)
-
-Plug **both** USB-TO-LoRa dongles into the laptop (paired AT settings). No OBD/GPS hardware needed.
+## Laptop dual-radio test
 
 ```bash
-pip install -r car/requirements.txt   # pyserial is enough for the sim
-python3 car/list_ports.py             # note the two tty/COM paths
-
-# terminal 1 — car simulator (TX dongle)
-LORA_PORT=/dev/ttyUSB0 python3 car/sim_transmit.py
-
-# terminal 2 — base station (RX dongle)
-cd base_station && LORA_PORT=/dev/ttyUSB1 npm start
+python3 car/list_ports.py
+python3 car/transmit.py --sim --freq 915 --lora-port /dev/ttyUSB0
+cd base_station && npm start -- --freq 915 --lora-port /dev/ttyUSB1
 ```
-
-Open http://localhost:3000 — speed/RPM should sweep and link should show `live`.
-On Windows use `COMx` paths instead of `/dev/ttyUSB*`.

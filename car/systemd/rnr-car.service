@@ -8,17 +8,13 @@ Type=simple
 User=rnracing
 WorkingDirectory=/home/rnracing/rnracing/car
 ExecStartPre=/bin/sleep 8
-ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py
+# Adjust serial paths / --freq for your hardware (prefer /dev/serial/by-id/...):
+ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 --lora-port /dev/ttyUSB0 --gps-port /dev/ttyUSB1 --obd-port /dev/ttyUSB2
 
 Restart=always
 RestartSec=5
 
 Environment=PYTHONUNBUFFERED=1
-# Override these to match your USB topology (recommended: /dev/serial/by-id/...):
-# Environment=LORA_PORT=/dev/ttyUSB0
-# Environment=GPS_PORT=/dev/ttyUSB1
-# Environment=OBD_PORT=/dev/ttyUSB2
-# Environment=TX_INTERVAL_SEC=1.0
 
 StandardOutput=journal
 StandardError=journal

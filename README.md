@@ -25,4 +25,4 @@ Fields are omitted when a sensor is temporarily unavailable. Either side may pow
 
 **Base station (laptop):** see `base_station/README.md` — `npm install && npm start`, open http://localhost:3000.
 
-**Dual-radio laptop test (no OBD/GPS):** `python3 car/sim_transmit.py` on one dongle + base station on the other — see `car/README.md`.
+**Dual-radio laptop test (no OBD adapter):** `python3 car/transmit.py --sim --freq 915 --lora-port …` + base `npm start -- --freq 915 --lora-port …` — see `car/README.md`.
