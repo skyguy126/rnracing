@@ -129,18 +129,26 @@ def lora_airtime_s(payload_bytes: int, sf: int = LORA_SF, bw_hz: int = LORA_BW_H
     return (n_preamble + 4.25) * t_sym + n_payload * t_sym
 
 
-def log_link_budget(pwr: int) -> None:
+def tx_guard_s() -> float:
+    """Quiet time after TX so the next packet cannot overlap on air."""
+    t_sym = (2**LORA_SF) / LORA_BW_HZ
+    return (8 + 4.25) * t_sym + 0.05  # one preamble-worth + module/USB settle
+
+
+def log_link_budget(pwr: int, interval: float) -> None:
     pl = estimate_payload_bytes()
     t_air = lora_airtime_s(pl)
+    t_gap = tx_guard_s()
+    min_period = t_air + t_gap
+    period = max(interval, min_period)
     max_pps = 1.0 / t_air
-    # Back-to-back is unrealistic; add ~one preamble of quiet + USB/module turnaround
-    t_gap = (8 + 4.25) * ((2**LORA_SF) / LORA_BW_HZ) + 0.05
-    sust_pps = 1.0 / (t_air + t_gap)
+    sust_pps = 1.0 / min_period
     log(
         f"link SF{LORA_SF}/125k/4/5 pwr={pwr}dBm | payload={pl}B | "
         f"airtime={t_air * 1000:.0f}ms | max≈{max_pps:.2f} pkt/s | "
-        f"sustainable≈{sust_pps:.2f} pkt/s"
+        f"sustainable≈{sust_pps:.2f} pkt/s | tx period={period:.2f}s (non-overlapping)"
     )
+
 
 def nmea_to_decimal(coord_str: str, direction: str) -> Optional[float]:
     if not coord_str or not direction or len(coord_str) < 4:
@@ -244,7 +252,7 @@ def read_obd(conn, *, sim: bool) -> dict:
 def main(args: argparse.Namespace) -> None:
     mode = "SIM OBD" if args.sim else "live OBD"
     log(f"starting TX ({mode}, {args.freq} MHz)")
-    log_link_budget(args.pwr)
+    log_link_budget(args.pwr, args.interval)
 
     lora: Optional[serial.Serial] = None
     gps: Optional[serial.Serial] = None
@@ -335,9 +343,10 @@ def main(args: argparse.Namespace) -> None:
             ) + "\n"
 
         try:
-            lora.write(line.encode("utf-8"))
+            line_bytes = line.encode("utf-8")
+            lora.write(line_bytes)
             lora.flush()
-            log(f"tx seq={seq} bytes={len(line)-1}")
+            log(f"tx seq={seq} bytes={len(line_bytes)}")
             seq = (seq + 1) & 0xFFFFFFFF
         except serial.SerialException as exc:
             log(f"LoRa write failed: {exc}")
@@ -350,7 +359,10 @@ def main(args: argparse.Namespace) -> None:
             time.sleep(args.reconnect)
             continue
 
-        delay = args.interval - (time.time() - loop_start)
+        # Pace on actual airtime so SF10 packets never overlap on the channel
+        min_period = lora_airtime_s(len(line_bytes)) + tx_guard_s()
+        period = max(args.interval, min_period)
+        delay = period - (time.time() - loop_start)
         if delay > 0:
             time.sleep(delay)
 
@@ -369,7 +381,8 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p.add_argument("--gps-baud", type=int, default=9600, help="GPS baud (default: 9600)")
     p.add_argument("--obd-port", default=None, help="OBD serial device (default: auto-detect)")
     p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional)")
-    p.add_argument("--interval", type=float, default=1.0, help="TX interval seconds (default: 1)")
+    p.add_argument("--interval", type=float, default=1.0,
+                   help="Minimum TX period seconds (raised automatically for SF10 airtime)")
     p.add_argument("--reconnect", type=float, default=2.0, help="Serial reconnect delay seconds")
     return p.parse_args(argv)
 
