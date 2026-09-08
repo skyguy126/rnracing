@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RN Racing — Base Station</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">RN Racing</div>
+      <div id="link" class="link offline">offline</div>
+    </header>
+
+    <section class="hero-metrics">
+      <div class="metric primary">
+        <div class="label">Speed</div>
+        <div class="value"><span id="speed">—</span><span class="unit">km/h</span></div>
+      </div>
+      <div class="metric primary">
+        <div class="label">RPM</div>
+        <div class="value"><span id="rpm">—</span></div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="metric">
+        <div class="label">Coolant</div>
+        <div class="value"><span id="coolant_temp">—</span><span class="unit">°C</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">Throttle</div>
+        <div class="value"><span id="throttle">—</span><span class="unit">%</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">Load</div>
+        <div class="value"><span id="engine_load">—</span><span class="unit">%</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">Fuel</div>
+        <div class="value"><span id="fuel_level">—</span><span class="unit">%</span></div>
+      </div>
+    </section>
+
+    <section class="meta">
+      <div><span class="k">GPS</span> <span id="gps">—</span></div>
+      <div><span class="k">Seq</span> <span id="seq">—</span></div>
+      <div><span class="k">Age</span> <span id="age">—</span></div>
+      <div><span class="k">Port</span> <span id="port">—</span></div>
+    </section>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
