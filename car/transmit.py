@@ -36,7 +36,8 @@ LORA_PWR_DEFAULT = 22
 # Waveshare stream mode holds a fixed 960-byte UART→RF cache (~6–10 of our lines).
 # Host writes must stay ≤1 in-flight LoRa frame or RX seq lags after kill.
 LORA_STREAM_CACHE_BYTES = 960
-AIRTIME_MARGIN = 1.25  # module overhead vs Semtech formula
+AIRTIME_MARGIN = 1.75  # module overhead + keep the 960B cache near empty
+DEFAULT_TX_INTERVAL_S = 2.5
 
 # Protocol `speed` is mph. python-obd SPEED is km/h; NMEA RMC speed is knots.
 KMH_TO_MPH = 0.621371
@@ -61,10 +62,21 @@ def find_ch343_port(exclude: Optional[set] = None) -> Optional[str]:
 
 
 def open_serial(path: str, baud: int) -> serial.Serial:
-    ser = serial.Serial(path, baud, timeout=0.5, write_timeout=2)
+    ser = serial.Serial(path, baud, timeout=0.5, write_timeout=5)
     ser.reset_input_buffer()
     ser.reset_output_buffer()
     return ser
+
+
+def write_serial(ser: serial.Serial, data: bytes) -> None:
+    """Write and fully drain the host UART/USB TX path before returning."""
+    ser.write(data)
+    ser.flush()
+    deadline = time.time() + 2.0
+    while getattr(ser, "out_waiting", 0) > 0 and time.time() < deadline:
+        time.sleep(0.005)
+    # Some CH343 stacks report out_waiting=0 before the adapter FIFO is empty
+    time.sleep(0.02)
 
 
 def _drain(ser: serial.Serial, wait_s: float = 0.2) -> str:
@@ -83,8 +95,7 @@ def configure_lora_freq(ser: serial.Serial, mhz: int, pwr: int = LORA_PWR_DEFAUL
     time.sleep(1.2)
     ser.reset_input_buffer()
     ser.reset_output_buffer()
-    ser.write(b"+++\r\n")
-    ser.flush()
+    write_serial(ser, b"+++\r\n")
     _drain(ser, 0.5)
     for cmd in (
         "AT+MODE=1",
@@ -96,8 +107,7 @@ def configure_lora_freq(ser: serial.Serial, mhz: int, pwr: int = LORA_PWR_DEFAUL
         f"AT+RXCH={ch}",
         "AT+EXIT",
     ):
-        ser.write(f"{cmd}\r\n".encode("ascii"))
-        ser.flush()
+        write_serial(ser, f"{cmd}\r\n".encode("ascii"))
         _drain(ser, 0.35)
     time.sleep(2.0)
     ser.reset_input_buffer()
@@ -111,11 +121,9 @@ def clear_lora_stream_cache(ser: serial.Serial) -> None:
     time.sleep(1.2)
     ser.reset_input_buffer()
     ser.reset_output_buffer()
-    ser.write(b"+++\r\n")
-    ser.flush()
+    write_serial(ser, b"+++\r\n")
     _drain(ser, 0.5)
-    ser.write(b"AT+EXIT\r\n")
-    ser.flush()
+    write_serial(ser, b"AT+EXIT\r\n")
     _drain(ser, 0.35)
     time.sleep(0.3)
     ser.reset_input_buffer()
@@ -221,7 +229,7 @@ def lora_airtime_s(payload_bytes: int, sf: int = LORA_SF, bw_hz: int = LORA_BW_H
 def tx_guard_s() -> float:
     """Quiet time after TX so the next host write cannot refill the stream cache."""
     t_sym = (2**LORA_SF) / LORA_BW_HZ
-    return (8 + 4.25) * t_sym + 0.25  # preamble + stream packetize / USB settle
+    return (8 + 4.25) * t_sym + 0.4  # preamble + stream packetize / USB settle
 
 
 def tx_slot_s(payload_bytes: int) -> float:
@@ -501,8 +509,7 @@ def main(args: argparse.Namespace) -> None:
             if wait > 0:
                 time.sleep(wait)
             wrote_at = time.time()
-            lora.write(line_bytes)
-            lora.flush()
+            write_serial(lora, line_bytes)
             log(f"tx seq={seq} bytes={len(line_bytes)}")
             seq = (seq + 1) & 0xFFFFFFFF
             next_tx_at = wrote_at + tx_slot_s(len(line_bytes))
@@ -538,8 +545,8 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p.add_argument("--gps-baud", type=int, default=9600, help="GPS baud (default: 9600)")
     p.add_argument("--obd-port", default=None, help="OBD serial device (default: auto-detect)")
     p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional)")
-    p.add_argument("--interval", type=float, default=1.0,
-                   help="Minimum TX period seconds (raised automatically for SF10 airtime)")
+    p.add_argument("--interval", type=float, default=DEFAULT_TX_INTERVAL_S,
+                   help=f"Minimum TX period seconds (default: {DEFAULT_TX_INTERVAL_S}; raised for SF10 airtime)")
     p.add_argument("--reconnect", type=float, default=2.0, help="Serial reconnect delay seconds")
     return p.parse_args(argv)
 

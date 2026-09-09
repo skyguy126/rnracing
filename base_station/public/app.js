@@ -876,6 +876,42 @@ els.lapResetBtn.addEventListener("click", resetLapTimer);
 
 function connect() {
   const es = new EventSource("/events");
+  /** @type {object|null} */
+  let pendingTelemetry = null;
+  /** @type {object|null} */
+  let pendingStatus = null;
+  let flushRaf = 0;
+  let lastAppliedSeq = null;
+
+  function flushPending() {
+    flushRaf = 0;
+    const status = pendingStatus;
+    pendingStatus = null;
+    const data = pendingTelemetry;
+    pendingTelemetry = null;
+    // Status first so link/age match the telemetry we paint
+    if (status) renderStatus(status);
+    if (data) {
+      const seq = data.seq;
+      // Drop older seq if a newer one already won the coalesce race
+      if (
+        lastAppliedSeq != null &&
+        seq != null &&
+        Number(seq) < Number(lastAppliedSeq) &&
+        Number(lastAppliedSeq) - Number(seq) < 1000
+      ) {
+        return;
+      }
+      if (seq != null) lastAppliedSeq = seq;
+      renderTelemetry(data);
+    }
+  }
+
+  function scheduleFlush() {
+    if (flushRaf) return;
+    flushRaf = requestAnimationFrame(flushPending);
+  }
+
   es.onmessage = (ev) => {
     let msg;
     try {
@@ -883,8 +919,14 @@ function connect() {
     } catch {
       return;
     }
-    if (msg.type === "telemetry" && msg.data) renderTelemetry(msg.data);
-    else if (msg.type === "status") renderStatus(msg);
+    if (msg.type === "telemetry" && msg.data) {
+      // Keep only the newest packet; drop backlog so the UI stays live
+      pendingTelemetry = msg.data;
+      scheduleFlush();
+    } else if (msg.type === "status") {
+      pendingStatus = msg;
+      scheduleFlush();
+    }
   };
   es.onerror = () => {
     setLink("offline");

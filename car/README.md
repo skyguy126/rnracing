@@ -41,7 +41,7 @@ python3 transmit.py --help
 | `--gps-port` | off | GPS serial device |
 | `--obd-port` | auto | OBD adapter (ignored with `--sim`) |
 | `--sim` | off | Use `obd_sim` instead of a real OBD adapter |
-| `--interval` | `1` | TX period (seconds) |
+| `--interval` | `2.5` | Min TX period seconds (raised for SF10 airtime) |
 
 ## Power-loss hardening
 

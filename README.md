@@ -56,3 +56,12 @@ Newline-delimited JSON over LoRa **stream (transparent) mode**, 115200 8N1. Exam
 ```
 
 `speed` is mph (OBD km/h and GPS knots are converted on the car before TX). `mil` / `dtcs` come from OBD `STATUS` + `GET_DTC` (polled every ~5s on the car). Fields are omitted when a sensor is temporarily unavailable. Either side may power-cycle at any time; both ends reconnect without exiting.
+
+## Link rate (SF10 / 125 kHz / 4/5)
+
+TX period is `max(--interval, airtime×1.75 + guard)` (default `--interval` 2.5 s). RX matches TX on a clean link.
+
+| Packet | Size | On-air | Host period | Rate |
+|--------|------|--------|-------------|------|
+| Typical telemetry | ~206 B | ~1.9 s | ~3.8 s | ~0.26 pkt/s |
+| Capped w/ DTCs | ≤240 B | ~2.2 s | ~4.3 s | ~0.23 pkt/s |
