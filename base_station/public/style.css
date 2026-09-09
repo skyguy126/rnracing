@@ -680,6 +680,28 @@ body {
   color: var(--muted);
 }
 
+.extrema {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin-top: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.metric.primary .extrema {
+  font-size: 0.8rem;
+}
+
+.ext-l {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
 .meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -795,5 +817,119 @@ body {
 @media (max-width: 480px) {
   .hero-metrics {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Horizontal looping race footer (assets from rnracing.org/timeline) */
+.race-footer {
+  margin: 1.75rem calc(-1 * clamp(1rem, 3vw, 2.5rem)) -2rem;
+  width: calc(100% + 2 * clamp(1rem, 3vw, 2.5rem));
+}
+
+.race-track {
+  position: relative;
+  width: 100%;
+  height: 9rem;
+  overflow: hidden;
+  pointer-events: none;
+  border-top: 1px solid var(--line);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(17, 17, 20, 0.55) 0%,
+      rgba(9, 9, 11, 0.95) 100%
+    );
+}
+
+.race-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 42%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(161, 161, 170, 0.35) 0 18px,
+    transparent 18px 34px
+  );
+  opacity: 0.55;
+}
+
+.race-car {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 110px;
+  height: auto;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+  opacity: 0;
+}
+
+.race-car-front {
+  z-index: 2;
+}
+
+.race-car-back {
+  z-index: 1;
+}
+
+.crash-sparks {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.crash-sparks.active {
+  animation: spark-burst 0.6s ease-out forwards;
+}
+
+@keyframes spark-burst {
+  0% {
+    opacity: 1;
+    box-shadow:
+      0 0 8px 4px rgba(255, 200, 50, 0.9),
+      0 0 20px 8px rgba(255, 150, 0, 0.6),
+      0 0 40px 16px rgba(255, 100, 0, 0.3);
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow:
+      0 0 12px 6px rgba(255, 200, 50, 0.7),
+      0 0 30px 12px rgba(255, 150, 0, 0.4),
+      0 0 60px 24px rgba(255, 100, 0, 0.2);
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    box-shadow:
+      0 0 4px 2px rgba(255, 200, 50, 0),
+      0 0 10px 4px rgba(255, 150, 0, 0),
+      0 0 20px 8px rgba(255, 100, 0, 0);
+    transform: translate(-50%, -50%) scale(2);
+  }
+}
+
+@media (max-width: 480px) {
+  .race-track {
+    height: 6.5rem;
+  }
+
+  .race-car {
+    width: 80px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .race-footer {
+    display: none;
   }
 }

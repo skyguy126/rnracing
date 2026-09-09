@@ -6,6 +6,16 @@ const els = {
   throttle: document.getElementById("throttle"),
   engine_load: document.getElementById("engine_load"),
   fuel_level: document.getElementById("fuel_level"),
+  speed_min: document.getElementById("speed_min"),
+  speed_max: document.getElementById("speed_max"),
+  rpm_min: document.getElementById("rpm_min"),
+  rpm_max: document.getElementById("rpm_max"),
+  coolant_temp_min: document.getElementById("coolant_temp_min"),
+  coolant_temp_max: document.getElementById("coolant_temp_max"),
+  throttle_min: document.getElementById("throttle_min"),
+  throttle_max: document.getElementById("throttle_max"),
+  engine_load_min: document.getElementById("engine_load_min"),
+  engine_load_max: document.getElementById("engine_load_max"),
   gps: document.getElementById("gps"),
   seq: document.getElementById("seq"),
   age: document.getElementById("age"),
@@ -224,6 +234,49 @@ function clearMetrics() {
   els.gps.textContent = "—";
   els.seq.textContent = "—";
   els.age.textContent = "—";
+  clearExtrema();
+}
+
+const EXTREMA_KEYS = ["speed", "rpm", "coolant_temp", "throttle", "engine_load"];
+
+/** @type {Record<string, { min: number|null, max: number|null }>} */
+const extrema = Object.fromEntries(
+  EXTREMA_KEYS.map((k) => [k, { min: null, max: null }])
+);
+
+function paintExtrema() {
+  for (const key of EXTREMA_KEYS) {
+    const { min, max } = extrema[key];
+    els[`${key}_min`].textContent = min == null ? "—" : fmt(min, 0);
+    els[`${key}_max`].textContent = max == null ? "—" : fmt(max, 0);
+  }
+}
+
+function clearExtrema() {
+  for (const key of EXTREMA_KEYS) {
+    extrema[key].min = null;
+    extrema[key].max = null;
+  }
+  paintExtrema();
+}
+
+function updateExtrema(data) {
+  let changed = false;
+  for (const key of EXTREMA_KEYS) {
+    const raw = data[key];
+    if (raw == null || Number.isNaN(Number(raw))) continue;
+    const n = Number(raw);
+    const slot = extrema[key];
+    if (slot.min == null || n < slot.min) {
+      slot.min = n;
+      changed = true;
+    }
+    if (slot.max == null || n > slot.max) {
+      slot.max = n;
+      changed = true;
+    }
+  }
+  if (changed) paintExtrema();
 }
 
 /** Frontend DTC cache — once seen, codes stay until session Reset. */
@@ -543,6 +596,7 @@ function renderTelemetry(data) {
     els.rpm.textContent = fmt(data.rpm, 0);
     els.throttle.textContent = fmt(data.throttle, 0);
   }
+  updateExtrema(data);
 
   if (capturing) appendCaptureRow(data);
 }
@@ -827,3 +881,128 @@ updateCaptureUi();
 updateLapButtons();
 paintDtcs();
 renderLapList();
+initRaceFooter();
+
+function initRaceFooter() {
+  const carFront = document.getElementById("carFront");
+  const carBack = document.getElementById("carBack");
+  const crashSparks = document.getElementById("crashSparks");
+  const track = document.getElementById("raceTrack");
+  if (!carFront || !carBack || !crashSparks || !track) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  // PNGs already face right — no rotate needed for L→R travel
+  const RACE_MS = 12_000;
+  const PAUSE_MS = 10_000;
+  const CYCLE_MS = RACE_MS + PAUSE_MS;
+  const LEAD_GAP = 150;
+  const CRASH_START = 0.45;
+  const CRASH_END = 0.54;
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const easeInOut = (t) =>
+    t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+  const start = performance.now();
+  let bangFired = false;
+  let lastCycle = -1;
+
+  function place(el, x, y, rotDeg) {
+    el.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) rotate(${rotDeg}deg)`;
+  }
+
+  function frame(now) {
+    const total = now - start;
+    const cycle = Math.floor(total / CYCLE_MS);
+    if (cycle !== lastCycle) {
+      lastCycle = cycle;
+      bangFired = false;
+      crashSparks.classList.remove("active");
+    }
+
+    const elapsed = total % CYCLE_MS;
+    const vw = track.clientWidth || window.innerWidth;
+    const trackH = track.clientHeight;
+    const baseY = trackH * 0.42;
+    const carW = carFront.offsetWidth || 110;
+    const floorY = trackH - carW * 0.28;
+
+    if (elapsed >= RACE_MS) {
+      carFront.style.opacity = "0";
+      carBack.style.opacity = "0";
+      place(carFront, -carW * 1.5, baseY, 0);
+      place(carBack, -carW * 1.5 - LEAD_GAP, baseY, 0);
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    const raw = elapsed / RACE_MS;
+    const progress = easeInOut(Math.min(raw, 1));
+
+    const frontX = lerp(-carW, vw + carW, Math.min(progress * 1.15, 1));
+    const frontWobble = Math.sin(progress * 80) * 5;
+    carFront.style.opacity = frontX > vw + carW ? "0" : "1";
+    place(carFront, frontX, baseY + frontWobble, 0);
+
+    const backX = lerp(-carW - LEAD_GAP, vw + carW, progress);
+    const backWobble = Math.sin(progress * 80 + 1.5) * 6;
+
+    if (progress < CRASH_START) {
+      bangFired = false;
+      crashSparks.classList.remove("active");
+      carBack.style.opacity = "1";
+      place(carBack, backX, baseY + backWobble, 0);
+    } else {
+      const crashT = clamp(
+        (progress - CRASH_START) / (CRASH_END - CRASH_START),
+        0,
+        1
+      );
+      const easedT = Math.pow(crashT, 1.35);
+
+      // Tip into the floor (0° nose-right → ~28° nose-down)
+      const crashRot = lerp(0, 28, easedT);
+      const crashY = lerp(baseY + backWobble, floorY, easedT);
+      // Keep creeping right a bit while crashing
+      const crashX = lerp(
+        lerp(-carW - LEAD_GAP, vw + carW, CRASH_START),
+        lerp(-carW - LEAD_GAP, vw + carW, CRASH_END) + 20,
+        easedT
+      );
+
+      carBack.style.opacity = "1";
+      place(carBack, crashX, crashY, crashRot);
+
+      if (crashT >= 1 && !bangFired) {
+        bangFired = true;
+        crashSparks.style.left = `${crashX}px`;
+        crashSparks.style.top = `${trackH - 8}px`;
+        crashSparks.classList.remove("active");
+        // reflow so the animation can re-trigger each loop
+        void crashSparks.offsetWidth;
+        crashSparks.classList.add("active");
+        setTimeout(() => crashSparks.classList.remove("active"), 600);
+      }
+
+      // After impact, hold near the floor then fade as the race ends
+      if (crashT >= 1) {
+        const holdX = lerp(
+          lerp(-carW - LEAD_GAP, vw + carW, CRASH_END) + 20,
+          vw * 0.72,
+          clamp((progress - CRASH_END) / (1 - CRASH_END), 0, 1)
+        );
+        place(carBack, holdX, floorY, 28);
+        if (progress > 0.92) {
+          carBack.style.opacity = String(
+            clamp(1 - (progress - 0.92) / 0.08, 0, 1)
+          );
+        }
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+}
