@@ -26,7 +26,7 @@ npm run list-ports
 |------|---------|---------|
 | `--sim` | off | Fake telemetry; no USB LoRa (GPS circle) |
 | `--freq` | `915` | `868` or `915` — programs LoRa via AT |
-| `--lora-port` | auto | USB-TO-LoRa device |
+| `--lora-port` | auto | USB-TO-LoRa device (`/dev/ttyUSB*` or `COMx`) |
 | `--port` | `3000` | HTTP dashboard port |
 | `--lora-baud` | `115200` | USB baud |
 
@@ -45,8 +45,17 @@ Car and base must use the **same** `--freq` (`868`→ch 18, `915`→ch 65).
 
 ## Dual-dongle laptop test
 
+Two USB-TO-LoRa dongles, same `--freq`. Pass explicit ports (auto-detect is ambiguous with two CH343s).
+
 ```bash
+# Linux
 python3 ../car/list_ports.py
 python3 ../car/transmit.py --sim --freq 915 --lora-port /dev/ttyUSB0
 npm start -- --freq 915 --lora-port /dev/ttyUSB1
+
+# Windows — COMx from list_ports / npm run list-ports (WCH CH343 driver if needed)
+python ../car/list_ports.py
+python ../car/transmit.py --sim --freq 915 --lora-port COM3
+npm start -- --freq 915 --lora-port COM5
+npm run list-ports
 ```

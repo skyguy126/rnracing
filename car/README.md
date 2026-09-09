@@ -51,8 +51,16 @@ sudo bash unharden_sdcard.sh && sudo reboot
 
 ## Laptop dual-radio test
 
+Two USB-TO-LoRa dongles + `--sim` OBD. Same `--freq` on car and base; pass explicit ports.
+
 ```bash
+# Linux
 python3 car/list_ports.py
 python3 car/transmit.py --sim --freq 915 --lora-port /dev/ttyUSB0
 cd base_station && npm start -- --freq 915 --lora-port /dev/ttyUSB1
+
+# Windows — COMx from list_ports (install WCH CH343 driver if ports missing)
+python car/list_ports.py
+python car/transmit.py --sim --freq 915 --lora-port COM3
+cd base_station && npm start -- --freq 915 --lora-port COM5
 ```

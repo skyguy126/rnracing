@@ -22,6 +22,22 @@ npm run sim
 # open http://localhost:3000
 ```
 
+### Dual-radio laptop harness (Linux / Windows)
+
+Plug in **two** Waveshare USB-TO-LoRa dongles. List ports, then run car TX + base RX in separate terminals (same `--freq`).
+
+```bash
+# Linux
+python3 car/list_ports.py
+python3 car/transmit.py --sim --freq 915 --pwr 22 --lora-port /dev/ttyUSB0
+cd base_station && npm start -- --freq 915 --pwr 22 --lora-port /dev/ttyUSB1
+
+# Windows (COMx from list_ports / npm run list-ports; install WCH CH343 driver if ports missing)
+python car/list_ports.py
+python car/transmit.py --sim --freq 915 --pwr 22 --lora-port COM3
+cd base_station && npm start -- --freq 915 --pwr 22 --lora-port COM5
+```
+
 LoRa telemetry between the car (Raspberry Pi) and a laptop base station using **Waveshare USB-TO-LoRa Data Transfer Module (SX1262)**.
 
 | Side | Path | Role |
