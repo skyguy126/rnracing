@@ -226,7 +226,7 @@ function setLink(link) {
 
 function clearMetrics() {
   els.speed.textContent = "—";
-  els.rpm.textContent = "—";
+  paintRpm(null);
   els.coolant_temp.textContent = "—";
   els.throttle.textContent = "—";
   els.engine_load.textContent = "—";
@@ -235,6 +235,14 @@ function clearMetrics() {
   els.seq.textContent = "—";
   els.age.textContent = "—";
   clearExtrema();
+}
+
+/** 5S-FE bands: default <5k, power 5–6k, redline 6k+. */
+function paintRpm(rpm) {
+  const n = rpm == null || Number.isNaN(Number(rpm)) ? null : Number(rpm);
+  els.rpm.textContent = n == null ? "—" : fmt(n, 0);
+  els.rpm.classList.toggle("rpm-power", n != null && n >= 5000 && n < 6000);
+  els.rpm.classList.toggle("rpm-redline", n != null && n >= 6000);
 }
 
 const EXTREMA_KEYS = ["speed", "rpm", "coolant_temp", "throttle", "engine_load"];
@@ -291,7 +299,7 @@ function formatArrivedHm(ms) {
   return `${h}:${m}`;
 }
 
-function makeDtcRow({ code = "", desc = "", arrived = null } = {}) {
+function makeDtcRow({ code = "", desc = "", arrivedAt = null } = {}) {
   const row = document.createElement("div");
   row.className = "dtc-row";
   const c = document.createElement("span");
@@ -302,7 +310,7 @@ function makeDtcRow({ code = "", desc = "", arrived = null } = {}) {
   d.textContent = desc;
   const t = document.createElement("span");
   t.className = "arrived";
-  t.textContent = formatArrivedHm(arrived);
+  t.textContent = formatArrivedHm(arrivedAt);
   row.append(c, d, t);
   return row;
 }
@@ -578,7 +586,6 @@ async function initMap() {
 function renderTelemetry(data) {
   lastData = data;
   els.coolant_temp.textContent = fmt(data.coolant_temp, 0);
-  els.engine_load.textContent = fmt(data.engine_load, 0);
   els.fuel_level.textContent = fmt(data.fuel_level, 0);
   els.seq.textContent = data.seq != null ? String(data.seq) : "—";
   if ("mil" in data || "dtcs" in data) ingestDtcs(data);
@@ -593,20 +600,21 @@ function renderTelemetry(data) {
   pushInterpSample(data);
   if (!interpOn) {
     els.speed.textContent = fmt(data.speed, 0);
-    els.rpm.textContent = fmt(data.rpm, 0);
+    paintRpm(data.rpm);
     els.throttle.textContent = fmt(data.throttle, 0);
+    els.engine_load.textContent = fmt(data.engine_load, 0);
   }
   updateExtrema(data);
 
   if (capturing) appendCaptureRow(data);
 }
 
-/* --- Linear interpolation for speed / rpm / throttle @ ~60 FPS --- */
+/* --- Linear interpolation for speed / rpm / throttle / load @ ~60 FPS --- */
 let interpOn = false;
 let interpRaf = 0;
-/** @type {{ t: number, speed: number|null, rpm: number|null, throttle: number|null } | null} */
+/** @type {{ t: number, speed: number|null, rpm: number|null, throttle: number|null, engine_load: number|null } | null} */
 let interpFrom = null;
-/** @type {{ t: number, speed: number|null, rpm: number|null, throttle: number|null } | null} */
+/** @type {{ t: number, speed: number|null, rpm: number|null, throttle: number|null, engine_load: number|null } | null} */
 let interpTo = null;
 let interpAnimStart = 0;
 let interpAnimDur = 0;
@@ -627,6 +635,10 @@ function takeInterpSample(data) {
     rpm: data.rpm != null && !Number.isNaN(Number(data.rpm)) ? Number(data.rpm) : null,
     throttle:
       data.throttle != null && !Number.isNaN(Number(data.throttle)) ? Number(data.throttle) : null,
+    engine_load:
+      data.engine_load != null && !Number.isNaN(Number(data.engine_load))
+        ? Number(data.engine_load)
+        : null,
   };
 }
 
@@ -637,10 +649,11 @@ function lerp(a, b, u) {
   return a + (b - a) * u;
 }
 
-function paintInterpFields(speed, rpm, throttle) {
+function paintInterpFields(speed, rpm, throttle, engine_load) {
   els.speed.textContent = speed == null ? "—" : fmt(speed, 0);
-  els.rpm.textContent = rpm == null ? "—" : fmt(rpm, 0);
+  paintRpm(rpm);
   els.throttle.textContent = throttle == null ? "—" : fmt(throttle, 0);
+  els.engine_load.textContent = engine_load == null ? "—" : fmt(engine_load, 0);
 }
 
 function interpTick() {
@@ -651,12 +664,13 @@ function interpTick() {
   const from = interpFrom || interpTo;
   const to = interpTo || interpFrom;
   if (!from && !to) {
-    paintInterpFields(null, null, null);
+    paintInterpFields(null, null, null, null);
   } else {
     paintInterpFields(
       lerp(from?.speed ?? null, to?.speed ?? null, u),
       lerp(from?.rpm ?? null, to?.rpm ?? null, u),
-      lerp(from?.throttle ?? null, to?.throttle ?? null, u)
+      lerp(from?.throttle ?? null, to?.throttle ?? null, u),
+      lerp(from?.engine_load ?? null, to?.engine_load ?? null, u)
     );
   }
   interpRaf = requestAnimationFrame(interpTick);
@@ -703,8 +717,9 @@ function setInterpolate(on) {
     stopInterpLoop();
     if (lastData) {
       els.speed.textContent = fmt(lastData.speed, 0);
-      els.rpm.textContent = fmt(lastData.rpm, 0);
+      paintRpm(lastData.rpm);
       els.throttle.textContent = fmt(lastData.throttle, 0);
+      els.engine_load.textContent = fmt(lastData.engine_load, 0);
     }
     return;
   }
