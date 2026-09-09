@@ -33,6 +33,11 @@ LORA_CR_AT = 1  # 1 = 4/5
 LORA_BW_HZ = 125_000
 LORA_PWR_DEFAULT = 22
 
+# Waveshare stream mode holds a fixed 960-byte UART→RF cache (~6–10 of our lines).
+# Host writes must stay ≤1 in-flight LoRa frame or RX seq lags after kill.
+LORA_STREAM_CACHE_BYTES = 960
+AIRTIME_MARGIN = 1.25  # module overhead vs Semtech formula
+
 # Protocol `speed` is mph. python-obd SPEED is km/h; NMEA RMC speed is knots.
 KMH_TO_MPH = 0.621371
 KNOTS_TO_MPH = 1.852 * KMH_TO_MPH
@@ -77,6 +82,7 @@ def configure_lora_freq(ser: serial.Serial, mhz: int, pwr: int = LORA_PWR_DEFAUL
     log(f"programming LoRa {mhz} MHz ch={ch} SF={LORA_SF} BW=125k CR=4/5 PWR={pwr}dBm")
     time.sleep(1.2)
     ser.reset_input_buffer()
+    ser.reset_output_buffer()
     ser.write(b"+++\r\n")
     ser.flush()
     _drain(ser, 0.5)
@@ -97,6 +103,23 @@ def configure_lora_freq(ser: serial.Serial, mhz: int, pwr: int = LORA_PWR_DEFAUL
     ser.reset_input_buffer()
     ser.reset_output_buffer()
     log(f"LoRa configured: {mhz} MHz stream mode")
+
+
+def clear_lora_stream_cache(ser: serial.Serial) -> None:
+    """Bounce AT mode to drop the Waveshare 960-byte stream TX cache."""
+    log(f"clearing LoRa stream cache (≤{LORA_STREAM_CACHE_BYTES}B)")
+    time.sleep(1.2)
+    ser.reset_input_buffer()
+    ser.reset_output_buffer()
+    ser.write(b"+++\r\n")
+    ser.flush()
+    _drain(ser, 0.5)
+    ser.write(b"AT+EXIT\r\n")
+    ser.flush()
+    _drain(ser, 0.35)
+    time.sleep(0.3)
+    ser.reset_input_buffer()
+    ser.reset_output_buffer()
 
 
 def estimate_payload_bytes() -> int:
@@ -196,9 +219,14 @@ def lora_airtime_s(payload_bytes: int, sf: int = LORA_SF, bw_hz: int = LORA_BW_H
 
 
 def tx_guard_s() -> float:
-    """Quiet time after TX so the next packet cannot overlap on air."""
+    """Quiet time after TX so the next host write cannot refill the stream cache."""
     t_sym = (2**LORA_SF) / LORA_BW_HZ
-    return (8 + 4.25) * t_sym + 0.05  # one preamble-worth + module/USB settle
+    return (8 + 4.25) * t_sym + 0.25  # preamble + stream packetize / USB settle
+
+
+def tx_slot_s(payload_bytes: int) -> float:
+    """Minimum host gap between USB writes (1 in-flight LoRa frame)."""
+    return lora_airtime_s(payload_bytes) * AIRTIME_MARGIN + tx_guard_s()
 
 
 def log_link_budget(pwr: int, interval: float) -> None:
@@ -206,19 +234,19 @@ def log_link_budget(pwr: int, interval: float) -> None:
     pl_dtc = estimate_payload_bytes_with_dtcs(6)
     t_air = lora_airtime_s(pl)
     t_air_dtc = lora_airtime_s(pl_dtc)
-    t_gap = tx_guard_s()
-    min_period = t_air + t_gap
-    min_period_dtc = t_air_dtc + t_gap
+    min_period = tx_slot_s(pl)
+    min_period_dtc = tx_slot_s(pl_dtc)
     period = max(interval, min_period)
     period_dtc = max(interval, min_period_dtc)
     max_pps = 1.0 / t_air
     sust_pps = 1.0 / min_period
     log(
         f"link SF{LORA_SF}/125k/4/5 pwr={pwr}dBm | payload≈{pl}B "
-        f"(with DTCs≤{pl_dtc}B after pack) | "
+        f"(with DTCs≤{pl_dtc}B after pack) | cache={LORA_STREAM_CACHE_BYTES}B | "
         f"airtime={t_air * 1000:.0f}ms / {t_air_dtc * 1000:.0f}ms w/ DTCs | "
-        f"max≈{max_pps:.2f} pkt/s | sustainable≈{sust_pps:.2f} pkt/s | "
-        f"tx period≥{period:.2f}s (DTCs≥{period_dtc:.2f}s, non-overlapping)"
+        f"max≈{max_pps:.2f} pkt/s | sustainable≈{sust_pps:.2f} pkt/s "
+        f"(margin×{AIRTIME_MARGIN}) | "
+        f"tx period≥{period:.2f}s (DTCs≥{period_dtc:.2f}s, 1 in-flight)"
     )
 
 
@@ -374,6 +402,7 @@ def main(args: argparse.Namespace) -> None:
     cached_dtc = {"mil": False, "dtcs": []}
     seq = 0
     lora_programmed_port: Optional[str] = None
+    next_tx_at = 0.0
 
     while True:
         loop_start = time.time()
@@ -392,6 +421,10 @@ def main(args: argparse.Namespace) -> None:
                 if lora_programmed_port != port:
                     configure_lora_freq(lora, args.freq, args.pwr)
                     lora_programmed_port = port
+                else:
+                    # Re-open after kill/disconnect: drop any leftover stream cache
+                    clear_lora_stream_cache(lora)
+                next_tx_at = 0.0
             except Exception as exc:
                 log(f"LoRa open/config failed: {exc}")
                 try:
@@ -463,10 +496,16 @@ def main(args: argparse.Namespace) -> None:
 
         try:
             line_bytes = line.encode("utf-8")
+            # Keep ≤1 frame in the module's 960B stream cache: never write early.
+            wait = next_tx_at - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            wrote_at = time.time()
             lora.write(line_bytes)
             lora.flush()
             log(f"tx seq={seq} bytes={len(line_bytes)}")
             seq = (seq + 1) & 0xFFFFFFFF
+            next_tx_at = wrote_at + tx_slot_s(len(line_bytes))
         except serial.SerialException as exc:
             log(f"LoRa write failed: {exc}")
             try:
@@ -475,13 +514,12 @@ def main(args: argparse.Namespace) -> None:
                 pass
             lora = None
             lora_programmed_port = None
+            next_tx_at = 0.0
             time.sleep(args.reconnect)
             continue
 
-        # Pace on this packet's airtime so larger MIL/DTC frames never overlap
-        min_period = lora_airtime_s(len(line_bytes)) + tx_guard_s()
-        period = max(args.interval, min_period)
-        delay = period - (time.time() - loop_start)
+        # Also honor --interval from loop start (airtime gate usually dominates at SF10)
+        delay = max(next_tx_at, loop_start + args.interval) - time.time()
         if delay > 0:
             time.sleep(delay)
 
