@@ -8,6 +8,7 @@ const els = {
   fuel_level: document.getElementById("fuel_level"),
   speed_min: document.getElementById("speed_min"),
   speed_max: document.getElementById("speed_max"),
+  speed_avg: document.getElementById("speed_avg"),
   rpm_min: document.getElementById("rpm_min"),
   rpm_max: document.getElementById("rpm_max"),
   coolant_temp_min: document.getElementById("coolant_temp_min"),
@@ -247,10 +248,12 @@ function paintRpm(rpm) {
 
 const EXTREMA_KEYS = ["speed", "rpm", "coolant_temp", "throttle", "engine_load"];
 
-/** @type {Record<string, { min: number|null, max: number|null }>} */
+/** @type {Record<string, { min: number|null, max: number|null, sum?: number, count?: number }>} */
 const extrema = Object.fromEntries(
   EXTREMA_KEYS.map((k) => [k, { min: null, max: null }])
 );
+extrema.speed.sum = 0;
+extrema.speed.count = 0;
 
 function paintExtrema() {
   for (const key of EXTREMA_KEYS) {
@@ -258,6 +261,8 @@ function paintExtrema() {
     els[`${key}_min`].textContent = min == null ? "—" : fmt(min, 0);
     els[`${key}_max`].textContent = max == null ? "—" : fmt(max, 0);
   }
+  const { sum, count } = extrema.speed;
+  els.speed_avg.textContent = count > 0 ? fmt(sum / count, 0) : "—";
 }
 
 function clearExtrema() {
@@ -265,6 +270,8 @@ function clearExtrema() {
     extrema[key].min = null;
     extrema[key].max = null;
   }
+  extrema.speed.sum = 0;
+  extrema.speed.count = 0;
   paintExtrema();
 }
 
@@ -281,6 +288,11 @@ function updateExtrema(data) {
     }
     if (slot.max == null || n > slot.max) {
       slot.max = n;
+      changed = true;
+    }
+    if (key === "speed") {
+      slot.sum += n;
+      slot.count += 1;
       changed = true;
     }
   }
