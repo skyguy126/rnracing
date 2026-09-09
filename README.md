@@ -5,7 +5,7 @@
 ```bash
 # --- car ---
 cd car
-pip install -r requirements.txt
+pip install -r requirements.txt   # includes: pip install obd
 python3 list_ports.py
 python3 transmit.py --sim --freq 915 --pwr 22 --lora-port /dev/ttyUSB0
 # Pi install: sudo bash install_service.sh   # edit ExecStart for ports/--freq/--pwr

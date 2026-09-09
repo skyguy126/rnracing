@@ -6,6 +6,8 @@ Headless Raspberry Pi transmitter: GPS + OBD → **Waveshare USB-TO-LoRa (SX1262
 
 ```bash
 cd car
+pip install -r requirements.txt
+# or just: pip install obd pyserial
 sudo bash install_service.sh
 ```
 

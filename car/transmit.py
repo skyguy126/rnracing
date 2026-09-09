@@ -20,11 +20,6 @@ from typing import Optional
 import serial
 from serial.tools import list_ports
 
-try:
-    import obd
-except ImportError:  # allow GPS-only / --sim bring-up without python-obd
-    obd = None
-
 # Waveshare USB-TO-LoRa uses a WCH CH343 USB-UART (VID 0x1A86).
 CH343_VID = 0x1A86
 
@@ -272,6 +267,17 @@ def read_gps_fix(ser: serial.Serial, deadline: float) -> dict:
     return out
 
 
+def _load_obd():
+    """Import python-obd or raise (no silent fallback)."""
+    try:
+        import obd
+    except ImportError as exc:
+        raise ImportError(
+            "python-obd is required for live OBD. Install with: pip install obd"
+        ) from exc
+    return obd
+
+
 def connect_obd(*, sim: bool, obd_port: Optional[str], obd_baud: Optional[int]):
     if sim:
         from obd_sim import OBD as SimOBD
@@ -280,8 +286,7 @@ def connect_obd(*, sim: bool, obd_port: Optional[str], obd_baud: Optional[int]):
         log(f"OBD connected ({conn.protocol_name()})")
         return conn
 
-    if obd is None:
-        return None
+    obd = _load_obd()
     try:
         if obd_port:
             conn = obd.OBD(obd_port, baudrate=obd_baud, fast=False, timeout=2)
@@ -304,9 +309,7 @@ def read_obd(conn, *, sim: bool, include_dtc: bool = False) -> dict:
     if sim:
         from obd_sim import commands
     else:
-        if obd is None:
-            return data
-        commands = obd.commands
+        commands = _load_obd().commands
 
     mapping = [
         ("speed", commands.SPEED),
