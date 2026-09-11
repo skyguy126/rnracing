@@ -18,9 +18,11 @@ cd car
 pip install -r requirements.txt
 # Pi only — enables rnr-car.service; edit ExecStart for ports/--freq/--pwr
 sudo bash install_service.sh
+# Pi only — power-loss hardening (read-only SD overlay)
+sudo bash harden_sdcard.sh && sudo reboot
 ```
 
-Optional on the Pi: `sudo bash harden_sdcard.sh && sudo reboot` (run `unharden_sdcard.sh` before updates). More detail in [`car/README.md`](car/README.md).
+Before updates on the Pi: `sudo bash unharden_sdcard.sh && sudo reboot`, then re-run `harden_sdcard.sh` when done. More detail in [`car/README.md`](car/README.md).
 
 ### Running
 
