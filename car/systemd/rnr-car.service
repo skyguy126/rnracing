@@ -1,15 +1,15 @@
 [Unit]
 Description=RN Racing car LoRa telemetry TX
-After=multi-user.target
-Wants=multi-user.target
+After=multi-user.target bluetooth.service rnr-obd-bluetooth.service
+Wants=multi-user.target rnr-obd-bluetooth.service
 
 [Service]
 Type=simple
 User=rnracing
 WorkingDirectory=/home/rnracing/rnracing/car
 ExecStartPre=/bin/sleep 8
-# Adjust serial paths / --freq for your hardware (prefer /dev/serial/by-id/...):
-ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 --lora-port /dev/ttyUSB0 --gps-port /dev/ttyUSB1 --obd-port /dev/ttyUSB2
+# Prefer /dev/serial/by-id/... for USB LoRa/GPS. OBD is Bluetooth RFCOMM via rnr-obd-bluetooth.service (/dev/obd).
+ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 --lora-port /dev/ttyUSB0 --gps-port /dev/ttyUSB1 --obd-port /dev/obd
 
 Restart=always
 RestartSec=5

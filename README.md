@@ -16,9 +16,11 @@ Car and base must use the **same** `--freq`. List ports with `python3 car/list_p
 ```bash
 cd car
 pip install -r requirements.txt
-# Pi only — enables rnr-car.service; edit ExecStart for ports/--freq/--pwr
+# One-time: power the OBD adapter, then pair (writes MAC into obd_bluetooth.conf)
+sudo bash pair_obd_bluetooth.sh
+# Enables boot bind (/dev/obd) + rnr-car.service; edit ExecStart for LoRa/GPS/--freq/--pwr
 sudo bash install_service.sh
-# Pi only — power-loss hardening (read-only SD overlay)
+# Optional — power-loss hardening (read-only SD overlay)
 sudo bash harden_sdcard.sh && sudo reboot
 ```
 
@@ -30,14 +32,14 @@ Before updates on the Pi: `sudo bash unharden_sdcard.sh && sudo reboot`, then re
 # Sim (fake OBD; laptop dual-dongle or bench test)
 python3 transmit.py --sim --freq 915 --pwr 22 --lora-port /dev/ttyUSB0
 
-# Regular (real GPS + OBD)
+# Regular (real GPS + Bluetooth OBD via /dev/obd)
 python3 transmit.py --freq 915 --pwr 22 \
   --lora-port /dev/serial/by-id/...-LoRa \
   --gps-port /dev/serial/by-id/...-GPS \
-  --obd-port /dev/serial/by-id/...-OBD
+  --obd-port /dev/obd
 ```
 
-On the Pi after `install_service.sh`: `journalctl -u rnr-car.service -f`
+On the Pi after `install_service.sh`: `journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f`
 
 ## Base station
 

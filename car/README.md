@@ -7,11 +7,12 @@ Headless Raspberry Pi transmitter: GPS + OBD → **Waveshare USB-TO-LoRa (SX1262
 ```bash
 cd car
 pip install -r requirements.txt
-# or just: pip install obd pyserial
+# One-time Bluetooth OBD pair (adapter powered / in pairing mode)
+sudo bash pair_obd_bluetooth.sh
 sudo bash install_service.sh
 ```
 
-That installs Python deps and enables `rnr-car.service`. Edit the unit `ExecStart=` flags for your ports (prefer `/dev/serial/by-id/...`):
+`install_service.sh` enables `rnr-obd-bluetooth.service` (binds OBD to `/dev/obd` on boot) and `rnr-car.service`. Edit LoRa/GPS paths if needed:
 
 ```bash
 sudo systemctl edit --full rnr-car.service
@@ -21,12 +22,24 @@ sudo systemctl edit --full rnr-car.service
 ExecStart=/usr/bin/python3 .../transmit.py --freq 915 \
   --lora-port /dev/serial/by-id/...-LoRa \
   --gps-port /dev/serial/by-id/...-GPS \
-  --obd-port /dev/serial/by-id/...-OBD
+  --obd-port /dev/obd
 ```
 
 ```bash
-journalctl -u rnr-car.service -f
+journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
 ```
+
+### Bluetooth OBD
+
+Classic SPP adapters (ELM327-class). Config: `obd_bluetooth.conf` (`OBD_BT_MAC`, optional `OBD_BT_NAME` for pairing scan, default `OBDII`).
+
+| When | What |
+|------|------|
+| Once | `sudo bash pair_obd_bluetooth.sh` — scan, pair, trust, write MAC, bind |
+| Every boot | `rnr-obd-bluetooth.service` → `/dev/rfcomm0` + symlink `/dev/obd` |
+| Runtime | `transmit.py` opens `/dev/obd` (reconnects when the adapter powers up with ignition) |
+
+If the advertised name is not `OBDII`, set `OBD_BT_NAME` before pairing, or set `OBD_BT_MAC` by hand and run `sudo bash bind_obd_bluetooth.sh`.
 
 ## Flags
 
@@ -38,9 +51,9 @@ python3 transmit.py --help
 |------|---------|---------|
 | `--freq` | `915` | `868` or `915` — programs LoRa via AT |
 | `--lora-port` | auto CH343 | USB-TO-LoRa device |
-| `--gps-port` | off | GPS serial device |
-| `--obd-port` | auto | OBD adapter (ignored with `--sim`) |
-| `--sim` | off | Use `obd_sim` instead of a real OBD adapter |
+| `--gps-port` | required* | GPS serial device (*optional with `--sim`) |
+| `--obd-port` | auto | OBD serial device (`/dev/obd` on the Pi; ignored with `--sim`) |
+| `--sim` | off | Fake OBD; GPS optional |
 | `--interval` | `2.5` | Min TX period seconds (raised for SF10 airtime) |
 
 ## Power-loss hardening

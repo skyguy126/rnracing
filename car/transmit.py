@@ -274,7 +274,14 @@ def nmea_to_decimal(coord_str: str, direction: str) -> Optional[float]:
 
 
 def read_gps_fix(ser: serial.Serial, deadline: float) -> dict:
-    out = {}
+    """
+    Read until a valid RMC fix or deadline.
+
+    Returns {"lat", "lon", optional "gps_speed"} on success.
+    On timeout / no lock, returns {"_gps_status": "no_fix"|"void"|"no_nmea", ...}.
+    """
+    saw_rmc = False
+    saw_void = False
     while time.time() < deadline:
         try:
             raw = ser.readline()
@@ -285,22 +292,32 @@ def read_gps_fix(ser: serial.Serial, deadline: float) -> dict:
         line = raw.decode("ascii", errors="ignore").strip()
         if not (line.startswith("$GPRMC") or line.startswith("$GNRMC")):
             continue
+        saw_rmc = True
         parts = line.split(",")
-        if len(parts) < 7 or parts[2] != "A":
+        if len(parts) < 7:
+            continue
+        if parts[2] != "A":
+            saw_void = True
             continue
         lat = nmea_to_decimal(parts[3], parts[4])
         lon = nmea_to_decimal(parts[5], parts[6])
         if lat is None or lon is None:
             continue
-        out["lat"] = round(lat, 6)
-        out["lon"] = round(lon, 6)
+        out = {
+            "lat": round(lat, 6),
+            "lon": round(lon, 6),
+        }
         if len(parts) > 7 and parts[7]:
             try:
                 out["gps_speed"] = round(float(parts[7]) * KNOTS_TO_MPH, 1)
             except ValueError:
                 pass
         return out
-    return out
+    if saw_void:
+        return {"_gps_status": "void"}
+    if saw_rmc:
+        return {"_gps_status": "no_fix"}
+    return {"_gps_status": "no_nmea"}
 
 
 def _load_obd():
@@ -398,8 +415,15 @@ def read_obd(conn, *, sim: bool, include_dtc: bool = False) -> dict:
 
 
 def main(args: argparse.Namespace) -> None:
+    gps_required = not args.sim
     mode = "SIM OBD" if args.sim else "live OBD"
     log(f"starting TX ({mode}, {args.freq} MHz)")
+    if gps_required:
+        log(f"GPS required on {args.gps_port} @ {args.gps_baud}")
+    elif args.gps_port:
+        log(f"GPS optional (sim) on {args.gps_port} @ {args.gps_baud}")
+    else:
+        log("GPS disabled (sim mode, no --gps-port)")
     log_link_budget(args.pwr, args.interval)
 
     lora: Optional[serial.Serial] = None
@@ -407,6 +431,7 @@ def main(args: argparse.Namespace) -> None:
     obd_conn = None
     next_obd_try = 0.0
     next_dtc_poll = 0.0
+    next_gps_warn = 0.0
     cached_dtc = {"mil": False, "dtcs": []}
     seq = 0
     lora_programmed_port: Optional[str] = None
@@ -449,22 +474,46 @@ def main(args: argparse.Namespace) -> None:
             if gps is None or not gps.is_open:
                 try:
                     gps = open_serial(args.gps_port, args.gps_baud)
-                    log(f"GPS open on {args.gps_port}")
+                    log(f"GPS open on {args.gps_port} @ {args.gps_baud}")
+                    next_gps_warn = 0.0
                 except serial.SerialException as exc:
-                    log(f"GPS open failed: {exc}")
+                    log(f"GPS open failed on {args.gps_port}: {exc}")
                     gps = None
+                    if gps_required:
+                        time.sleep(args.reconnect)
+                        continue
 
             if gps is not None:
                 try:
                     fix = read_gps_fix(gps, deadline=loop_start + 0.4)
-                    payload.update(fix)
+                    status = fix.pop("_gps_status", None)
+                    if status is None:
+                        payload.update(fix)
+                    elif loop_start >= next_gps_warn:
+                        if status == "void":
+                            log("GPS: RMC void (no satellite lock yet)")
+                        elif status == "no_nmea":
+                            log(
+                                f"GPS: no NMEA on {args.gps_port} "
+                                f"(check wiring/baud={args.gps_baud})"
+                            )
+                        else:
+                            log("GPS: no valid fix yet")
+                        next_gps_warn = loop_start + 10.0
                 except serial.SerialException as exc:
-                    log(f"GPS read error: {exc}")
+                    log(f"GPS read error on {args.gps_port}: {exc}")
                     try:
                         gps.close()
                     except Exception:
                         pass
                     gps = None
+                    if gps_required:
+                        time.sleep(args.reconnect)
+                        continue
+        elif gps_required:
+            # Defensive: parse_args should have rejected this already
+            log("GPS required but --gps-port missing; exiting")
+            raise SystemExit(2)
 
         if obd_conn is None or not obd_conn.is_connected():
             if loop_start >= next_obd_try:
@@ -533,7 +582,8 @@ def main(args: argparse.Namespace) -> None:
 
 def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="RN Racing car LoRa telemetry TX")
-    p.add_argument("--sim", action="store_true", help="Use obd_sim instead of a real OBD adapter")
+    p.add_argument("--sim", action="store_true",
+                   help="Use obd_sim instead of a real OBD adapter; GPS becomes optional")
     p.add_argument("--freq", type=int, choices=sorted(FREQ_CHANNELS), default=915,
                    help="LoRa band MHz; programs module via AT (default: 915)")
     p.add_argument("--pwr", type=int, default=LORA_PWR_DEFAULT, choices=range(10, 23),
@@ -541,14 +591,18 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
                    help=f"LoRa TX power dBm 10–22 (default: {LORA_PWR_DEFAULT})")
     p.add_argument("--lora-port", default=None, help="USB-TO-LoRa serial device (default: auto CH343)")
     p.add_argument("--lora-baud", type=int, default=115200, help="LoRa USB baud (default: 115200)")
-    p.add_argument("--gps-port", default=None, help="GPS serial device (optional)")
+    p.add_argument("--gps-port", default=None,
+                   help="GPS serial device (required unless --sim)")
     p.add_argument("--gps-baud", type=int, default=9600, help="GPS baud (default: 9600)")
-    p.add_argument("--obd-port", default=None, help="OBD serial device (default: auto-detect)")
+    p.add_argument("--obd-port", default=None, help="OBD serial device (default: auto-detect; ignored with --sim)")
     p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional)")
     p.add_argument("--interval", type=float, default=DEFAULT_TX_INTERVAL_S,
                    help=f"Minimum TX period seconds (default: {DEFAULT_TX_INTERVAL_S}; raised for SF10 airtime)")
     p.add_argument("--reconnect", type=float, default=2.0, help="Serial reconnect delay seconds")
-    return p.parse_args(argv)
+    args = p.parse_args(argv)
+    if not args.sim and not args.gps_port:
+        p.error("--gps-port is required unless --sim")
+    return args
 
 
 if __name__ == "__main__":

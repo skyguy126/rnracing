@@ -1,0 +1,19 @@
+[Unit]
+Description=RN Racing bind Bluetooth OBD (RFCOMM)
+Documentation=file:///home/rnracing/rnracing/car/README.md
+After=bluetooth.service bluetooth.target
+Wants=bluetooth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=OBD_BT_CONF=/home/rnracing/rnracing/car/obd_bluetooth.conf
+EnvironmentFile=-/home/rnracing/rnracing/car/obd_bluetooth.conf
+ExecStart=/home/rnracing/rnracing/car/bind_obd_bluetooth.sh
+ExecStop=/bin/sh -c 'dev="${OBD_RFCOMM_DEV:-/dev/rfcomm0}"; n="${dev##*[!0-9]}"; rfcomm release "$n" 2>/dev/null || true; rm -f /dev/obd'
+# bluetoothd / hci0 may not be ready on first try
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
