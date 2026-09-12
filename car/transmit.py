@@ -8,7 +8,7 @@ USB serial port (stream / transparent mode). TX-only — no RX path.
 The Waveshare dongle is the only CH343 on the Pi; the port is discovered on each
 connect (the by-id serial string is not stable on this chip).
 
-  python3 transmit.py --freq 915 --obd-port /dev/obd
+  python3 transmit.py --freq 915
   # optional GPS: add --gps-port /dev/serial/by-id/...
   python3 transmit.py --sim --freq 915
 """
@@ -27,6 +27,8 @@ from serial.tools import list_ports
 
 # Waveshare USB-TO-LoRa uses a WCH CH343 USB-UART (VID 0x1A86).
 CH343_VID = 0x1A86
+# bind_obd_bluetooth.sh always aliases the RFCOMM node here (rfcommN can change).
+OBD_PORT = "/dev/obd"
 BY_ID_DIR = Path("/dev/serial/by-id")
 
 # HF modules: freq_MHz = 850 + channel  →  868→18, 915→65 (915 is in US 902–928)
@@ -408,7 +410,7 @@ def _load_obd():
     return obd
 
 
-def connect_obd(*, sim: bool, obd_port: Optional[str], obd_baud: Optional[int]):
+def connect_obd(*, sim: bool, obd_baud: Optional[int]):
     if sim:
         from obd_sim import OBD as SimOBD
 
@@ -418,12 +420,9 @@ def connect_obd(*, sim: bool, obd_port: Optional[str], obd_baud: Optional[int]):
 
     obd = _load_obd()
     try:
-        if obd_port:
-            conn = obd.OBD(obd_port, baudrate=obd_baud, fast=False, timeout=2)
-        else:
-            conn = obd.OBD(fast=False, timeout=2)
+        conn = obd.OBD(OBD_PORT, baudrate=obd_baud, fast=False, timeout=2)
         if conn.is_connected():
-            log(f"OBD connected ({conn.protocol_name()})")
+            log(f"OBD connected on {OBD_PORT} ({conn.protocol_name()})")
             return conn
         conn.close()
     except Exception as exc:
@@ -523,15 +522,17 @@ def main(args: argparse.Namespace) -> None:
         payload = {"type": "tel", "seq": seq, "ts": int(loop_start)}
 
         if lora is None or not lora.is_open:
-            exclude = {args.gps_port, args.obd_port} - {None}
+            exclude = {args.gps_port, OBD_PORT} - {None}
             port = find_ch343_port(exclude=exclude)
             if not port:
                 log("LoRa port not found; retrying")
                 time.sleep(args.reconnect)
                 continue
+            by_id = stable_serial_path(port)
+            port_label = f"{port} ({by_id})" if by_id != port else port
             try:
                 lora = open_serial(port, args.lora_baud)
-                log(f"LoRa open on {port} @ {args.lora_baud}")
+                log(f"LoRa open on {port_label} @ {args.lora_baud}")
                 if lora_programmed_port != port:
                     configure_lora_freq(lora, args.freq, args.pwr)
                     lora_programmed_port = port
@@ -540,7 +541,7 @@ def main(args: argparse.Namespace) -> None:
                     clear_lora_stream_cache(lora)
                 next_tx_at = 0.0
             except Exception as exc:
-                log(f"LoRa open/config failed: {exc}")
+                log(f"LoRa open/config failed on {port_label}: {exc}")
                 try:
                     if lora is not None:
                         lora.close()
@@ -594,9 +595,7 @@ def main(args: argparse.Namespace) -> None:
 
         if obd_conn is None or not obd_conn.is_connected():
             if loop_start >= next_obd_try:
-                obd_conn = connect_obd(
-                    sim=args.sim, obd_port=args.obd_port, obd_baud=args.obd_baud
-                )
+                obd_conn = connect_obd(sim=args.sim, obd_baud=args.obd_baud)
                 next_obd_try = loop_start + (5.0 if obd_conn is None else 0.0)
 
         if obd_conn is not None:
@@ -670,8 +669,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p.add_argument("--gps-port", default=None,
                    help="GPS path (prefer /dev/serial/by-id/...; omit to run without GPS)")
     p.add_argument("--gps-baud", type=int, default=9600, help="GPS baud (default: 9600)")
-    p.add_argument("--obd-port", default=None, help="OBD serial device (default: auto-detect; ignored with --sim)")
-    p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional)")
+    p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional; default: probe)")
     p.add_argument("--interval", type=float, default=DEFAULT_TX_INTERVAL_S,
                    help=f"Minimum TX period seconds (default: {DEFAULT_TX_INTERVAL_S}; raised for SF10 airtime)")
     p.add_argument("--reconnect", type=float, default=2.0, help="Serial reconnect delay seconds")

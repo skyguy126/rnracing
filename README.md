@@ -13,7 +13,7 @@ Same `--freq` on both sides. The car finds its LoRa dongle (the only CH343 on th
 
 ### First-time setup (Pi)
 
-Do this once. After that, **every reboot auto-starts** telemetry — you do not run `transmit.py` by hand on the car.
+Do this once. After that, **every reboot auto-starts** telemetry — you do not run `transmit.py` by hand on the car. The first start after boot waits 15s so Bluetooth and the USB dongles can settle.
 
 ```bash
 cd car
@@ -35,7 +35,7 @@ Not needed on the Pi after setup. Use for bench tests:
 
 ```bash
 # No GPS (same flags the systemd unit uses). LoRa is the only CH343.
-python3 transmit.py --freq 915 --pwr 22 --obd-port /dev/obd
+python3 transmit.py --freq 915 --pwr 22
 
 # With GPS — add --gps-port /dev/serial/by-id/...
 # Sim OBD: add --sim (GPS still optional)

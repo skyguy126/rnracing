@@ -4,7 +4,7 @@ OBD (+ optional GPS) → **Waveshare USB-TO-LoRa (SX1262)** stream mode.
 
 ## Setup (once on the Pi)
 
-`install_service.sh` **enables and starts** `rnr-obd-bluetooth` + `rnr-car`. They also **auto-start on every reboot**. You do not manually run `transmit.py` for normal car use.
+`install_service.sh` **enables and starts** `rnr-obd-bluetooth` + `rnr-car`. They also **auto-start on every reboot**. On boot, `rnr-car` starts after the Bluetooth bind, then waits 15s so the LoRa dongle and OBD adapter can enumerate. A later restart in the same boot does not wait. You do not manually run `transmit.py` for normal car use.
 
 ```bash
 cd car
@@ -16,11 +16,11 @@ journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
 ```
 
 ```text
-ExecStart=.../transmit.py --freq 915 --obd-port /dev/obd
+ExecStart=.../transmit.py --freq 915
 # optional GPS:  --gps-port /dev/serial/by-id/...
 ```
 
-LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343 serial string is not stable). OBD: `/dev/obd` (Bluetooth bind). GPS, if used, still wants a by-id path from `python3 list_ports.py`. Omit `--gps-port` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width.
+LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343 serial string is not stable). OBD is always `/dev/obd`, a symlink the Bluetooth bind service creates onto `/dev/rfcomm0`. GPS, if used, still wants a by-id path from `python3 list_ports.py`. Omit `--gps-port` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width.
 
 
 ### Bluetooth OBD
@@ -29,8 +29,8 @@ LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343
 |------|------|
 | Scan | `python3 list_bluetooth.py` (optional seconds, default 20) |
 | Once | `sudo bash pair_obd_bluetooth.sh` (adapter powered and discoverable) |
-| Boot | `rnr-obd-bluetooth.service` → `/dev/rfcomm0` + `/dev/obd` |
-| Runtime | `transmit.py --obd-port /dev/obd` (retries when adapter powers up) |
+| Boot | `rnr-obd-bluetooth.service` → `/dev/rfcomm0` and symlink `/dev/obd` |
+| Runtime | `transmit.py` opens `/dev/obd` (retries when the adapter powers up) |
 
 ## Flags
 
@@ -42,8 +42,7 @@ python3 transmit.py --help
 |------|---------|---------|
 | `--freq` | `915` | `868` or `915` |
 | `--gps-port` | optional | omit to run without GPS; prefer `/dev/serial/by-id/...` |
-| `--obd-port` | auto | `/dev/obd` on Pi; ignored with `--sim` |
-| `--sim` | off | fake OBD |
+| `--sim` | off | fake OBD (no `/dev/obd`) |
 | `--interval` | `2.5` | min TX period (s) |
 
 ## Power-loss hardening
