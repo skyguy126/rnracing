@@ -7,6 +7,8 @@ from serial.tools import list_ports
 
 CH343_VID = 0x1A86
 BY_ID_DIR = Path("/dev/serial/by-id")
+# Always present on the Pi with GPS unplugged. A new line is the GPS module.
+IGNORE = {"ttyS0", "ttyAMA0", "serial0"}
 
 
 def by_id_for(device: str) -> str | None:
@@ -27,8 +29,14 @@ def by_id_for(device: str) -> str | None:
 
 for p in list_ports.comports():
     vid = p.vid or 0
+    name = Path(p.device).name
     hay = f"{p.description or ''} {p.manufacturer or ''}".upper()
-    tag = "  <-- LoRa?" if vid == CH343_VID or "CH343" in hay or "CH340" in hay or "WCH" in hay else ""
+    if vid == CH343_VID or "CH343" in hay or "CH340" in hay or "WCH" in hay:
+        tag = "  <-- LoRa"
+    elif name.startswith("rfcomm") or name in IGNORE or p.device == "/dev/obd":
+        tag = ""
+    else:
+        tag = "  <-- GPS"
     stable = by_id_for(p.device)
     primary = stable or p.device
     bits = [

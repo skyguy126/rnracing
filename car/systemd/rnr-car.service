@@ -11,8 +11,9 @@ WorkingDirectory=/home/rnracing/rnracing/car
 # Bluetooth bind unit has finished, then gives USB LoRa and the OBD adapter
 # time to enumerate. Later restarts in the same boot do not wait.
 ExecStartPre=+/bin/sh -c 'stamp=/run/rnr-car.settled; up=$(cut -d. -f1 /proc/uptime); if [ "$$up" -lt 180 ] && [ ! -e "$$stamp" ]; then echo "[car] waiting 15s after boot for USB and Bluetooth to settle"; sleep 15; fi; touch "$$stamp"'
-# LoRa is the only CH343; transmit.py finds it. GPS is optional — add:
-#   --gps-port /dev/serial/by-id/...
+# LoRa is the only CH343; transmit.py finds it. GPS is optional.
+# Add --gps to bind the other USB serial adapter (retries and does not send if it is missing):
+# ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 --gps
 ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915
 
 Restart=always

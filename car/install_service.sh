@@ -63,7 +63,7 @@ systemctl --no-pager --full status rnr-obd-bluetooth.service rnr-car.service || 
 
 echo
 echo "Installed. LoRa is auto-detected (the single CH343)."
-echo "  GPS is optional — add --gps-port /dev/serial/by-id/... (from: python3 ${SCRIPT_DIR}/list_ports.py):"
+echo "  GPS is optional — add --gps (the other USB serial, not the LoRa CH343):"
 echo "    sudo systemctl edit --full rnr-car.service"
 echo "  OBD logs:  journalctl -u rnr-obd-bluetooth.service -f"
 echo "  Car logs:  journalctl -u rnr-car.service -f"

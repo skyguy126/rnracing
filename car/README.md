@@ -12,15 +12,18 @@ pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh
 python3 list_bluetooth.py                  # scan ~20s, print nearby Bluetooth devices
 sudo bash install_service.sh               # LoRa is the only CH343; no port to set
+# optional GPS — the other USB serial (not the LoRa CH343)
+sudo systemctl edit --full rnr-car.service   # add --gps
+sudo systemctl restart rnr-car.service
 journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
 ```
 
 ```text
 ExecStart=.../transmit.py --freq 915
-# optional GPS:  --gps-port /dev/serial/by-id/...
+# optional GPS:  --gps
 ```
 
-LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343 serial string is not stable). OBD is always `/dev/obd`, a symlink the Bluetooth bind service creates onto `/dev/rfcomm0`. GPS, if used, still wants a by-id path from `python3 list_ports.py`. Omit `--gps-port` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width.
+LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343 serial string is not stable). OBD is always `/dev/obd`, a symlink the Bluetooth bind service creates onto `/dev/rfcomm0`. GPS, if `--gps` is set, is the other USB serial adapter (not the CH343, not `/dev/obd`). Omit `--gps` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width. If `--gps` is set and that adapter is missing, transmit retries and does not send.
 
 
 ### Bluetooth OBD
@@ -41,7 +44,7 @@ python3 transmit.py --help
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--freq` | `915` | `868` or `915` |
-| `--gps-port` | optional | omit to run without GPS; prefer `/dev/serial/by-id/...` |
+| `--gps` | off | bind the other USB serial adapter as GPS; error if it is missing |
 | `--sim` | off | fake OBD (no `/dev/obd`) |
 | `--interval` | `2.5` | min TX period (s) |
 

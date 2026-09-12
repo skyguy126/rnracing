@@ -6,10 +6,11 @@ Collects OBD and optional GPS and writes newline-delimited JSON into the LoRa mo
 USB serial port (stream / transparent mode). TX-only — no RX path.
 
 The Waveshare dongle is the only CH343 on the Pi; the port is discovered on each
-connect (the by-id serial string is not stable on this chip).
+connect (the by-id serial string is not stable on this chip). With --gps, the
+other USB serial adapter is the GPS module.
 
   python3 transmit.py --freq 915
-  # optional GPS: add --gps-port /dev/serial/by-id/...
+  python3 transmit.py --freq 915 --gps
   python3 transmit.py --sim --freq 915
 """
 
@@ -76,6 +77,30 @@ def stable_serial_path(device: str) -> str:
     return device
 
 
+def _is_lora_port(p) -> bool:
+    vid = p.vid or 0
+    hay = f"{p.description or ''} {p.manufacturer or ''}".upper()
+    return vid == CH343_VID or "CH343" in hay or "CH340" in hay or "WCH" in hay
+
+
+# Present with the GPS unplugged: onboard UART, Bluetooth OBD, and the LoRa CH343.
+_ALWAYS_THERE = {"ttyS0", "ttyAMA0", "serial0"}
+
+
+def _is_background_port(device: str) -> bool:
+    try:
+        resolved = str(Path(device).resolve())
+    except OSError:
+        resolved = device
+    name = Path(resolved).name
+    return (
+        name in _ALWAYS_THERE
+        or name.startswith("rfcomm")
+        or resolved == "/dev/obd"
+        or device == OBD_PORT
+    )
+
+
 def find_ch343_port(exclude: Optional[set] = None) -> Optional[str]:
     """Live tty of the Waveshare CH343. Rescanned on every open — do not pin by-id."""
     exclude = exclude or set()
@@ -95,15 +120,34 @@ def find_ch343_port(exclude: Optional[set] = None) -> Optional[str]:
         except OSError:
             if p.device in exclude:
                 continue
-        vid = p.vid or 0
-        hay = f"{p.description or ''} {p.manufacturer or ''}".upper()
-        if vid == CH343_VID or "CH343" in hay or "CH340" in hay or "WCH" in hay:
+        if _is_lora_port(p):
             found.append(p.device)
     if not found:
         return None
     if len(found) > 1:
         log(f"multiple CH343 ports {found}; using {found[0]}")
     return found[0]
+
+
+def find_gps_port() -> Optional[str]:
+    """The port that is not ttyS0, rfcomm, or the LoRa CH343.
+
+    With the GPS unplugged those three are the whole list. The module is whichever
+    extra device appears. Rescanned on every open. None (and a log) if it is missing
+    or if more than one extra device is present.
+    """
+    found = [
+        p.device
+        for p in list_ports.comports()
+        if not _is_lora_port(p) and not _is_background_port(p.device)
+    ]
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        log("GPS adapter not found; no serial device besides ttyS0, rfcomm, and the LoRa CH343")
+    else:
+        log(f"GPS adapter ambiguous {found}; expected one extra serial device")
+    return None
 
 
 def open_serial(path: str, baud: int) -> serial.Serial:
@@ -215,7 +259,7 @@ def estimate_payload_bytes_with_dtcs(n_codes: int = 6) -> int:
     return len(pack_telemetry_line(sample).encode("utf-8"))
 
 
-# Same JSON width as a typical fix (estimate_payload_bytes). Used when --gps-port
+# Same JSON width as a typical fix (estimate_payload_bytes). Used when --gps
 # is omitted so the on-air line does not shrink.
 _GPS_FIX_PAIR = json.dumps({"lat": 38.161234, "lon": -122.454567}, separators=(",", ":"))[1:-1]
 _GPS_ABSENT_PAIR = '"lat":null,"lon":null'
@@ -491,19 +535,13 @@ def read_obd(conn, *, sim: bool, include_dtc: bool = False) -> dict:
 
 
 def main(args: argparse.Namespace) -> None:
-    if args.gps_port:
-        args.gps_port = stable_serial_path(args.gps_port)
-
-    gps_required = bool(args.gps_port) and not args.sim
-    gps_absent = not args.gps_port
+    gps_absent = not args.gps
     mode = "SIM OBD" if args.sim else "live OBD"
     log(f"starting TX ({mode}, {args.freq} MHz)")
-    if gps_required:
-        log(f"GPS required on {args.gps_port} @ {args.gps_baud}")
-    elif args.gps_port:
-        log(f"GPS optional (sim) on {args.gps_port} @ {args.gps_baud}")
+    if args.gps:
+        log(f"GPS required @ {args.gps_baud} (serial device besides ttyS0, rfcomm, and LoRa)")
     else:
-        log("GPS disabled (no --gps-port)")
+        log("GPS disabled (no --gps)")
     log_link_budget(args.pwr, args.interval)
 
     lora: Optional[serial.Serial] = None
@@ -522,8 +560,7 @@ def main(args: argparse.Namespace) -> None:
         payload = {"type": "tel", "seq": seq, "ts": int(loop_start)}
 
         if lora is None or not lora.is_open:
-            exclude = {args.gps_port, OBD_PORT} - {None}
-            port = find_ch343_port(exclude=exclude)
+            port = find_ch343_port(exclude={OBD_PORT})
             if not port:
                 log("LoRa port not found; retrying")
                 time.sleep(args.reconnect)
@@ -552,46 +589,47 @@ def main(args: argparse.Namespace) -> None:
                 time.sleep(args.reconnect)
                 continue
 
-        if args.gps_port:
+        if args.gps:
             if gps is None or not gps.is_open:
+                port = find_gps_port()
+                if not port:
+                    time.sleep(args.reconnect)
+                    continue
                 try:
-                    gps = open_serial(args.gps_port, args.gps_baud)
-                    log(f"GPS open on {args.gps_port} @ {args.gps_baud}")
+                    gps = open_serial(port, args.gps_baud)
+                    log(f"GPS open on {port} @ {args.gps_baud}")
                     next_gps_warn = 0.0
                 except serial.SerialException as exc:
-                    log(f"GPS open failed on {args.gps_port}: {exc}")
+                    log(f"GPS open failed on {port}: {exc}")
                     gps = None
-                    if gps_required:
-                        time.sleep(args.reconnect)
-                        continue
+                    time.sleep(args.reconnect)
+                    continue
 
-            if gps is not None:
+            try:
+                fix = read_gps_fix(gps, deadline=loop_start + 0.4)
+                status = fix.pop("_gps_status", None)
+                if status is None:
+                    payload.update(fix)
+                elif loop_start >= next_gps_warn:
+                    if status == "void":
+                        log("GPS: RMC void (no satellite lock yet)")
+                    elif status == "no_nmea":
+                        log(
+                            f"GPS: no NMEA on {gps.port} "
+                            f"(check wiring/baud={args.gps_baud})"
+                        )
+                    else:
+                        log("GPS: no valid fix yet")
+                    next_gps_warn = loop_start + 10.0
+            except serial.SerialException as exc:
+                log(f"GPS read error on {gps.port}: {exc}")
                 try:
-                    fix = read_gps_fix(gps, deadline=loop_start + 0.4)
-                    status = fix.pop("_gps_status", None)
-                    if status is None:
-                        payload.update(fix)
-                    elif loop_start >= next_gps_warn:
-                        if status == "void":
-                            log("GPS: RMC void (no satellite lock yet)")
-                        elif status == "no_nmea":
-                            log(
-                                f"GPS: no NMEA on {args.gps_port} "
-                                f"(check wiring/baud={args.gps_baud})"
-                            )
-                        else:
-                            log("GPS: no valid fix yet")
-                        next_gps_warn = loop_start + 10.0
-                except serial.SerialException as exc:
-                    log(f"GPS read error on {args.gps_port}: {exc}")
-                    try:
-                        gps.close()
-                    except Exception:
-                        pass
-                    gps = None
-                    if gps_required:
-                        time.sleep(args.reconnect)
-                        continue
+                    gps.close()
+                except Exception:
+                    pass
+                gps = None
+                time.sleep(args.reconnect)
+                continue
 
         if obd_conn is None or not obd_conn.is_connected():
             if loop_start >= next_obd_try:
@@ -666,8 +704,8 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
                    metavar="DBM",
                    help=f"LoRa TX power dBm 10–22 (default: {LORA_PWR_DEFAULT})")
     p.add_argument("--lora-baud", type=int, default=115200, help="LoRa USB baud (default: 115200)")
-    p.add_argument("--gps-port", default=None,
-                   help="GPS path (prefer /dev/serial/by-id/...; omit to run without GPS)")
+    p.add_argument("--gps", action="store_true",
+                   help="Bind the other USB serial adapter as GPS (required if set; omit to run without GPS)")
     p.add_argument("--gps-baud", type=int, default=9600, help="GPS baud (default: 9600)")
     p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional; default: probe)")
     p.add_argument("--interval", type=float, default=DEFAULT_TX_INTERVAL_S,
