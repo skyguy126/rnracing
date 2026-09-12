@@ -19,7 +19,7 @@ journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
 ```
 
 ```text
-ExecStart=.../transmit.py --freq 915
+ExecStart=.../pyenv_python.sh .../transmit.py --freq 915
 # optional GPS:  --gps
 ```
 

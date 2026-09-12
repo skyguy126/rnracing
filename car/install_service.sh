@@ -10,16 +10,52 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_CAR="${SCRIPT_DIR}"
 DEFAULT_CAR="/home/rnracing/rnracing/car"
+SERVICE_USER="rnracing"
+# shellcheck source=pyenv_python.sh
+source "${SCRIPT_DIR}/pyenv_python.sh"
+
+PYTHON_VERSION_FILE=""
+PYTHON_VERSION_NAME=""
+PYTHON="$(resolve_python)"
+case "${PYTHON}" in
+  *'&'*|*'\'*|'|'*)
+    echo "[-] Refusing unusual python path: ${PYTHON}" >&2
+    exit 1
+    ;;
+esac
+if ! [[ -x "${PYTHON}" ]]; then
+  echo "[-] Python is not executable: ${PYTHON}" >&2
+  exit 1
+fi
+if id "${SERVICE_USER}" >/dev/null 2>&1 && ! sudo -u "${SERVICE_USER}" test -x "${PYTHON}"; then
+  echo "[-] ${SERVICE_USER} cannot execute ${PYTHON}" >&2
+  exit 1
+fi
 
 install_unit() {
   local name="$1"
   local src="${SCRIPT_DIR}/systemd/${name}"
   local dst="/etc/systemd/system/${name}"
+  # rnr-car.service execs pyenv_python.sh, which resolves .python-version at start.
   sed -e "s|${DEFAULT_CAR}|${REPO_CAR}|g" "${src}" >"${dst}"
   chmod 644 "${dst}"
 }
 
-chmod +x "${SCRIPT_DIR}/bind_obd_bluetooth.sh" "${SCRIPT_DIR}/pair_obd_bluetooth.sh"
+run_as_python_owner() {
+  local owner=""
+  if [[ "${PYTHON}" == /usr/bin/python3 ]]; then
+    "$@"
+    return
+  fi
+  owner="$(stat -c '%U' "${PYTHON}")"
+  if [[ "${owner}" == "root" || "${owner}" == "$(id -un)" ]]; then
+    "$@"
+  else
+    sudo -u "${owner}" -H "$@"
+  fi
+}
+
+chmod +x "${SCRIPT_DIR}/bind_obd_bluetooth.sh" "${SCRIPT_DIR}/pair_obd_bluetooth.sh" "${SCRIPT_DIR}/pyenv_python.sh"
 
 # Serial + BlueZ access for the service user
 if id rnracing >/dev/null 2>&1; then
@@ -40,7 +76,15 @@ else
   printf '[Policy]\nAutoEnable=true\n' >/etc/bluetooth/main.conf
 fi
 
-python3 -m pip install --upgrade -r "${SCRIPT_DIR}/requirements.txt"
+if [[ -n "${PYTHON_VERSION_FILE}" ]]; then
+  echo "Python: ${PYTHON} (${PYTHON_VERSION_NAME} from ${PYTHON_VERSION_FILE})"
+else
+  echo "Python: ${PYTHON} (no .python-version)"
+fi
+if ! run_as_python_owner "${PYTHON}" -m pip --version >/dev/null 2>&1; then
+  run_as_python_owner "${PYTHON}" -m ensurepip --upgrade
+fi
+run_as_python_owner "${PYTHON}" -m pip install --upgrade -r "${SCRIPT_DIR}/requirements.txt"
 
 install_unit rnr-obd-bluetooth.service
 install_unit rnr-car.service
@@ -62,7 +106,8 @@ systemctl restart rnr-car.service
 systemctl --no-pager --full status rnr-obd-bluetooth.service rnr-car.service || true
 
 echo
-echo "Installed. LoRa is auto-detected (the single CH343)."
+echo "Installed. Python: ${PYTHON}"
+echo "LoRa is auto-detected (the single CH343)."
 echo "  GPS is optional — add --gps (the other USB serial, not the LoRa CH343):"
 echo "    sudo systemctl edit --full rnr-car.service"
 echo "  OBD logs:  journalctl -u rnr-obd-bluetooth.service -f"

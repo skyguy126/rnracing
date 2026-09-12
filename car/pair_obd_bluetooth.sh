@@ -34,11 +34,14 @@ fi
 
 log() { echo "[rnr-obd-pair] $*"; }
 
+# shellcheck source=pyenv_python.sh
+source "${SCRIPT_DIR}/pyenv_python.sh"
+
 rfkill unblock bluetooth 2>/dev/null || true
 bluetoothctl power on >/dev/null
 
 log "Inquiring for ${MAC}, then pairing while BlueZ still has it."
-python3 "${SCRIPT_DIR}/list_bluetooth.py" --pair "${MAC}"
+"$(resolve_python)" "${SCRIPT_DIR}/list_bluetooth.py" --pair "${MAC}"
 
 log "Binding RFCOMM..."
 bash "${SCRIPT_DIR}/bind_obd_bluetooth.sh"
