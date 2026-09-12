@@ -33,7 +33,7 @@ USB LoRa (and GPS, if used): `/dev/serial/by-id/...` only. OBD: `/dev/obd` (Blue
 | | |
 |------|------|
 | Scan | `python3 list_bluetooth.py` (optional seconds, default 20) |
-| Once | `sudo bash pair_obd_bluetooth.sh` (pairs `OBD_BT_MAC` in `obd_bluetooth.conf`) |
+| Once | `sudo bash pair_obd_bluetooth.sh` (adapter powered and discoverable) |
 | Boot | `rnr-obd-bluetooth.service` → `/dev/rfcomm0` + `/dev/obd` |
 | Runtime | `transmit.py --obd-port /dev/obd` (retries when adapter powers up) |
 

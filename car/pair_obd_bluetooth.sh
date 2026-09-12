@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# One-time: pair and trust the Bluetooth OBD adapter at OBD_BT_MAC.
-# That address is a classic BD_ADDR and does not change for this adapter.
-# After this, bind_obd_bluetooth.sh / the systemd unit keep /dev/rfcomm0
-# (+ /dev/obd) ready across reboots.
+# One-time: inquire for the classic OBD adapter at OBD_BT_MAC, then pair
+# and trust it. The address is fixed, but BlueZ cannot pair a device it
+# has not seen in this inquiry. After this, bind_obd_bluetooth.sh / the
+# systemd unit keep /dev/rfcomm0 (+ /dev/obd) ready across reboots.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,15 +36,9 @@ log() { echo "[rnr-obd-pair] $*"; }
 
 rfkill unblock bluetooth 2>/dev/null || true
 bluetoothctl power on >/dev/null
-bluetoothctl agent NoInputNoOutput >/dev/null 2>&1 || true
-bluetoothctl default-agent >/dev/null 2>&1 || true
 
-log "Pairing + trusting ${MAC} (adapter must be powered)..."
-bluetoothctl pair "${MAC}" || true
-bluetoothctl trust "${MAC}"
-bluetoothctl connect "${MAC}" || true
-sleep 1
-bluetoothctl disconnect "${MAC}" 2>/dev/null || true
+log "Inquiring for ${MAC}, then pairing while BlueZ still has it."
+python3 "${SCRIPT_DIR}/list_bluetooth.py" --pair "${MAC}"
 
 log "Binding RFCOMM..."
 bash "${SCRIPT_DIR}/bind_obd_bluetooth.sh"
