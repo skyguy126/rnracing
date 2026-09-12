@@ -9,6 +9,10 @@ LoRa telemetry from the car (Raspberry Pi) to a laptop base station using **Wave
 
 Same `--freq` on both sides. The car finds its LoRa dongle (the only CH343 on the Pi) and, if present at start, the other USB serial adapter as GPS. The base station still wants `/dev/serial/by-id/...` from `npm run list-ports`. Windows base: `COMx`.
 
+<p align="center">
+  <img src="docs/base-station-dashboard.png" width="720" alt="Base station dashboard: speed, RPM, coolant, throttle, check-engine codes, lap timer, and GPS path at Sonoma Raceway">
+</p>
+
 ## Car
 
 ### First-time setup (Pi)
