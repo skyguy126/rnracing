@@ -1,4 +1,4 @@
-# RN Racing — Season 2
+# RN Telemetry
 
 LoRa telemetry from the car (Raspberry Pi) to a laptop base station using **Waveshare USB-TO-LoRa (SX1262)**.
 
