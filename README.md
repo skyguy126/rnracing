@@ -20,6 +20,7 @@ cd car
 pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh          # once: pair OBD (adapter powered)
 python3 list_ports.py                    # note LoRa /dev/serial/by-id/... (GPS too, if used)
+python3 list_bluetooth.py                # scan ~20s, print nearby Bluetooth devices
 sudo bash install_service.sh             # enables + starts services now and on every boot
 sudo systemctl edit --full rnr-car.service   # set REPLACE_LORA; add --gps-port to enable GPS
 sudo systemctl restart rnr-car.service

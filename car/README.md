@@ -11,6 +11,7 @@ cd car
 pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh
 python3 list_ports.py
+python3 list_bluetooth.py                  # scan ~20s, print nearby Bluetooth devices
 sudo bash install_service.sh
 sudo systemctl edit --full rnr-car.service   # set REPLACE_LORA; add --gps-port to enable GPS
 sudo systemctl restart rnr-car.service
@@ -29,6 +30,7 @@ USB LoRa (and GPS, if used): `/dev/serial/by-id/...` only. OBD: `/dev/obd` (Blue
 
 ### Bluetooth OBD
 
+| Scan | `python3 list_bluetooth.py` (optional seconds, default 20) |
 | Once | `sudo bash pair_obd_bluetooth.sh` (config: `obd_bluetooth.conf`) |
 |------|------|
 | Boot | `rnr-obd-bluetooth.service` → `/dev/rfcomm0` + `/dev/obd` |
