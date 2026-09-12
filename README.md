@@ -20,10 +20,13 @@ cd car
 pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh          # once: pair OBD (adapter powered)
 python3 list_bluetooth.py                # scan ~20s, print nearby Bluetooth devices
-sudo bash install_service.sh             # enables + starts; LoRa is auto-detected
+sudo bash install_service.sh             # enables + starts rnr-obd-bluetooth and rnr-car
+# optional GPS — path from: python3 list_ports.py
+sudo systemctl edit --full rnr-car.service   # add --gps-port /dev/serial/by-id/...
+sudo systemctl restart rnr-car.service
 ```
 
-GPS is optional. To enable, `sudo systemctl edit --full rnr-car.service` and add `--gps-port /dev/serial/by-id/...` (from `python3 list_ports.py`), then `sudo systemctl restart rnr-car.service`.
+GPS is optional. LoRa is auto-detected (the only CH343). Skip the `systemctl edit` line to run without GPS.
 
 Optional SD hardening: `sudo bash harden_sdcard.sh && sudo reboot`. Before Pi updates: `unharden_sdcard.sh` then harden again. Details: [`car/README.md`](car/README.md).
 
