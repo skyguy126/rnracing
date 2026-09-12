@@ -24,7 +24,7 @@ if [[ ! "${MAC}" =~ ^([0-9A-F]{2}:){5}[0-9A-F]{2}$ ]]; then
   exit 1
 fi
 if [[ "${MAC}" == "00:00:00:00:00:00" ]]; then
-  echo "Set a real OBD_BT_MAC in ${CONF} (run pair_obd_bluetooth.sh first)" >&2
+  echo "Set OBD_BT_MAC in ${CONF} (python3 list_bluetooth.py while the adapter is powered)" >&2
   exit 1
 fi
 
