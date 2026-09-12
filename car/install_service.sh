@@ -55,7 +55,7 @@ run_as_python_owner() {
   fi
 }
 
-chmod +x "${SCRIPT_DIR}/bind_obd_bluetooth.sh" "${SCRIPT_DIR}/pair_obd_bluetooth.sh" "${SCRIPT_DIR}/pyenv_python.sh"
+chmod +x "${SCRIPT_DIR}/bind_obd_bluetooth.sh" "${SCRIPT_DIR}/pair_obd_bluetooth.sh" "${SCRIPT_DIR}/pyenv_python.sh" "${SCRIPT_DIR}/uninstall_service.sh"
 
 # Serial + BlueZ access for the service user
 if id rnracing >/dev/null 2>&1; then
@@ -79,7 +79,7 @@ fi
 if [[ -n "${PYTHON_VERSION_FILE}" ]]; then
   echo "Python: ${PYTHON} (${PYTHON_VERSION_NAME} from ${PYTHON_VERSION_FILE})"
 else
-  echo "Python: ${PYTHON} (no .python-version)"
+  echo "Python: ${PYTHON} (no .python-version in repo root)"
 fi
 if ! run_as_python_owner "${PYTHON}" -m pip --version >/dev/null 2>&1; then
   run_as_python_owner "${PYTHON}" -m ensurepip --upgrade
@@ -113,3 +113,4 @@ echo "    sudo systemctl edit --full rnr-car.service"
 echo "  OBD logs:  journalctl -u rnr-obd-bluetooth.service -f"
 echo "  Car logs:  journalctl -u rnr-car.service -f"
 echo "  First-time OBD pair (once): sudo bash ${SCRIPT_DIR}/pair_obd_bluetooth.sh"
+echo "  Uninstall:                 sudo bash ${SCRIPT_DIR}/uninstall_service.sh"

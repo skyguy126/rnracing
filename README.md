@@ -28,7 +28,11 @@ sudo systemctl restart rnr-car.service
 
 GPS is optional. LoRa is auto-detected (the only CH343). Skip the `systemctl edit` line to run without GPS. With `--gps`, transmit will not start until that other adapter is present.
 
+`.python-version` is in the repo root, not `car/`. Re-run `sudo bash install_service.sh` to refresh the units and deps (no uninstall or reboot).
+
 Logs anytime: `journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f`
+
+Uninstall: `sudo bash uninstall_service.sh` (stops and removes the units; leaves pairing and Python packages).
 
 ### SD hardening (optional)
 

@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
-# Folder-local pyenv interpreter. systemd and sudo do not load pyenv shims.
+# Repo pyenv interpreter. .python-version lives in the repo root, one
+# folder above car/. systemd and sudo do not load pyenv shims.
 #
 #   source pyenv_python.sh          # defines resolve_python (uses SCRIPT_DIR)
 #   ./pyenv_python.sh script.py …   # exec that interpreter
 #
 : "${SERVICE_USER:=rnracing}"
 
-# Nearest .python-version from dir upward (same walk pyenv local uses).
+# .python-version is in the repo root (parent of car/). A copy in car/ still works.
 nearest_python_version() {
-  local dir
-  dir="$(cd "$1" && pwd)"
-  while [[ "${dir}" != "/" ]]; do
-    if [[ -f "${dir}/.python-version" ]]; then
-      echo "${dir}/.python-version"
-      return 0
-    fi
-    dir="$(dirname "${dir}")"
-  done
+  local car parent
+  car="$(cd "$1" && pwd)"
+  parent="$(cd "${car}/.." && pwd)"
+  if [[ -f "${parent}/.python-version" ]]; then
+    echo "${parent}/.python-version"
+    return 0
+  fi
+  if [[ -f "${car}/.python-version" ]]; then
+    echo "${car}/.python-version"
+    return 0
+  fi
   return 1
 }
 
@@ -51,7 +54,7 @@ python_for_version() {
   return 1
 }
 
-# Print the real interpreter for SCRIPT_DIR's .python-version.
+# Print the real interpreter for the repo's .python-version (parent of car/).
 # Prefers the service user's pyenv so the unit and sudo scripts match.
 resolve_python() {
   local version_file="" version="" home="" root="" candidate="" resolved=""
@@ -92,7 +95,7 @@ resolve_python() {
     fi
     if [[ -x "${root}/bin/pyenv" ]]; then
       resolved="$(
-        cd "${SCRIPT_DIR}" && PYENV_ROOT="${root}" "${root}/bin/pyenv" which python3 2>/dev/null || true
+        cd "$(dirname "${version_file}")" && PYENV_ROOT="${root}" "${root}/bin/pyenv" which python3 2>/dev/null || true
       )"
       if [[ -n "${resolved}" && -x "${resolved}" && "${resolved}" != */shims/* ]]; then
         echo "${resolved}"
@@ -103,7 +106,7 @@ resolve_python() {
 
   echo "[-] No interpreter for pyenv ${version} (${version_file})." >&2
   if [[ ${#roots[@]} -eq 0 ]]; then
-    echo "    pyenv not found for ${SERVICE_USER} (~/.pyenv)." >&2
+    echo "    pyenv not found for ${SERVICE_USER} (~/.pyenv). Expected ${version_file}." >&2
   else
     echo "    Install that version in ${roots[0]}, then re-run." >&2
   fi

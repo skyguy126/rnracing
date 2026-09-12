@@ -6,6 +6,8 @@ OBD (+ optional GPS) → **Waveshare USB-TO-LoRa (SX1262)** stream mode.
 
 `install_service.sh` **enables and starts** `rnr-obd-bluetooth` + `rnr-car`. They also **auto-start on every reboot**. On boot, `rnr-car` starts after the Bluetooth bind, then waits 15s so the LoRa dongle and OBD adapter can enumerate. A later restart in the same boot does not wait. You do not manually run `transmit.py` for normal car use.
 
+`.python-version` is in the repo root (parent of `car/`). Re-run install to refresh units and deps into that interpreter — no uninstall or reboot needed.
+
 ```bash
 cd car
 pip install -r requirements.txt
@@ -16,6 +18,12 @@ sudo bash install_service.sh               # LoRa is the only CH343; no port to 
 sudo systemctl edit --full rnr-car.service   # add --gps
 sudo systemctl restart rnr-car.service
 journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
+```
+
+Uninstall (stops the units, removes them, releases `/dev/obd`; leaves pairing and Python packages):
+
+```bash
+sudo bash uninstall_service.sh
 ```
 
 ```text
