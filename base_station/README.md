@@ -1,61 +1,54 @@
 # RN Racing — Base Station
 
-Receives car telemetry over a **Waveshare USB-TO-LoRa (SX1262)** dongle and serves a simple live dashboard.
+LoRa RX from the car → live dashboard (**Waveshare USB-TO-LoRa SX1262**).
 
 ## Start
 
 ```bash
 cd base_station
-cp .env.example .env   # paste MAPBOX_TOKEN=pk…
+cp .env.example .env   # MAPBOX_TOKEN=pk…
 npm install
-npm start -- --freq 915 --lora-port /dev/ttyUSB1
-# Windows: npm start -- --freq 915 --lora-port COM5
-
-# no USB dongle — fake telemetry (GPS walks in a circle)
-npm run sim
+npm run list-ports
+npm run sim            # no dongle; fake telemetry
 ```
-
-Open **http://localhost:3000**
 
 ```bash
-node server.js --help
-npm run list-ports
+# Linux — use by-id from list-ports
+npm start -- --freq 915 --lora-port /dev/serial/by-id/...
+
+# Windows — use COMx from list-ports (WCH CH343 driver if none show up)
+npm start -- --freq 915 --lora-port COM5
 ```
+
+Open http://localhost:3000
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--sim` | off | Fake telemetry; no USB LoRa (GPS circle) |
-| `--freq` | `915` | `868` or `915` — programs LoRa via AT |
-| `--lora-port` | auto | USB-TO-LoRa device (`/dev/ttyUSB*` or `COMx`) |
-| `--port` | `3000` | HTTP dashboard port |
+| `--sim` | off | fake telemetry; no USB LoRa |
+| `--freq` | `915` | `868` or `915` |
+| `--lora-port` | auto | Linux: `/dev/serial/by-id/...`; Windows: `COMx` |
+| `--port` | `3000` | HTTP port |
 | `--lora-baud` | `115200` | USB baud |
 
-Mapbox: set `MAPBOX_TOKEN` in `.env` (see `.env.example`).
+`npm run list-ports` picks Windows (`list-ports-windows.js` → `COMx`) or Linux (by-id). Pi car listing stays in `car/list_ports.py`.
 
-Car and base must use the **same** `--freq` (`868`→ch 18, `915`→ch 65).
+Car and base must share `--freq` (`868`→ch 18, `915`→ch 65).
 
 ## Behaviour
 
-- Car → base only.
-- Serial blackouts reconnect automatically.
-- Dashboard: `listening` / `live` / `stale` / `offline`.
-- **Start / Stop capture** downloads a CSV of buffered telemetry.
-- **Reset** clears the map path, capture buffer, and on-screen session values.
-- Mapbox path map needs `MAPBOX_TOKEN` in `.env`.
+- Car → base only; serial blackouts reconnect automatically
+- Dashboard: `listening` / `live` / `stale` / `offline`
+- **Start / Stop capture** → CSV; **Reset** clears map path and session values
 
 ## Dual-dongle laptop test
-
-Two USB-TO-LoRa dongles, same `--freq`. Pass explicit ports (auto-detect is ambiguous with two CH343s).
 
 ```bash
 # Linux
 python3 ../car/list_ports.py
-python3 ../car/transmit.py --sim --freq 915 --lora-port /dev/ttyUSB0
-npm start -- --freq 915 --lora-port /dev/ttyUSB1
+python3 ../car/transmit.py --sim --freq 915 --lora-port /dev/serial/by-id/...
+npm start -- --freq 915 --lora-port /dev/serial/by-id/...
 
-# Windows — COMx from list_ports / npm run list-ports (WCH CH343 driver if needed)
-python ../car/list_ports.py
-python ../car/transmit.py --sim --freq 915 --lora-port COM3
-npm start -- --freq 915 --lora-port COM5
+# Windows (base RX; car TX also on Windows if testing both)
 npm run list-ports
+npm start -- --freq 915 --lora-port COM5
 ```

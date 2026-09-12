@@ -3,7 +3,8 @@
  * Base station: read Waveshare USB-TO-LoRa (SX1262) stream mode, serve a
  * simple live dashboard. Car → base is TX-only; this process only receives.
  *
- *   node server.js --freq 915 --lora-port /dev/ttyUSB1
+ *   npm run list-ports   # copy /dev/serial/by-id/... (Linux) or COMx (Windows)
+ *   node server.js --freq 915 --lora-port /dev/serial/by-id/...
  *   npm start -- --freq 868 --lora-port COM5 --port 3000
  */
 
@@ -86,7 +87,7 @@ function parseArgs(argv) {
   --sim                Fake telemetry (no USB LoRa); GPS walks in a circle
   --freq 868|915       LoRa band (default: 915)
   --pwr 10-22          TX power dBm (default: 22); SF=10 BW=125k CR=4/5 fixed
-  --lora-port PATH     USB-TO-LoRa device (default: auto)
+  --lora-port PATH     USB-TO-LoRa path (prefer /dev/serial/by-id/...; default: auto)
   --lora-baud N        USB baud (default: 115200)
   --port N             HTTP dashboard port (default: 3000)
   --interval-ms N      Sim tick ms (default: 1000)
@@ -124,6 +125,29 @@ const FREQ_CH = FREQ_CHANNELS[FREQ_MHZ];
 const LORA_PWR = args.pwr;
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || "";
 const CH343_VID = 0x1a86;
+const BY_ID_DIR = "/dev/serial/by-id";
+
+function stableSerialPath(devicePath) {
+  if (!devicePath || !fs.existsSync(BY_ID_DIR)) return devicePath;
+  if (devicePath.includes("/serial/by-id/") || devicePath.includes("\\serial\\by-id\\")) {
+    return devicePath;
+  }
+  let target;
+  try {
+    target = fs.realpathSync(devicePath);
+  } catch {
+    return devicePath;
+  }
+  for (const name of fs.readdirSync(BY_ID_DIR).sort()) {
+    const link = path.join(BY_ID_DIR, name);
+    try {
+      if (fs.realpathSync(link) === target) return link;
+    } catch {
+      /* skip */
+    }
+  }
+  return devicePath;
+}
 
 /** @type {import('express').Response[]} */
 const sseClients = [];
@@ -208,14 +232,14 @@ function statusSnapshot() {
 }
 
 async function findLoraPort() {
-  if (LORA_PORT) return LORA_PORT;
+  if (LORA_PORT) return stableSerialPath(LORA_PORT);
   const ports = await SerialPort.list();
   const hit = ports.find((p) => {
     const vid = p.vendorId ? parseInt(p.vendorId, 16) : 0;
     const hay = `${p.manufacturer || ""} ${p.friendlyName || ""} ${p.path || ""}`.toUpperCase();
     return vid === CH343_VID || hay.includes("CH343") || hay.includes("CH340") || hay.includes("WCH");
   });
-  return hit?.path || null;
+  return hit ? stableSerialPath(hit.path) : null;
 }
 
 function handleLine(line) {

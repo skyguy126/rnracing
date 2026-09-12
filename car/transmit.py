@@ -5,8 +5,10 @@ Car-side telemetry transmitter for Waveshare USB-TO-LoRa (SX1262).
 Collects GPS + OBD and writes newline-delimited JSON into the LoRa module's
 USB serial port (stream / transparent mode). TX-only — no RX path.
 
-  python3 transmit.py --freq 915 --lora-port /dev/ttyUSB0 --gps-port /dev/ttyUSB1
-  python3 transmit.py --sim --freq 915 --lora-port /dev/ttyUSB0
+  python3 list_ports.py   # copy /dev/serial/by-id/... paths
+  python3 transmit.py --freq 915 \\
+    --lora-port /dev/serial/by-id/... --gps-port /dev/serial/by-id/... --obd-port /dev/obd
+  python3 transmit.py --sim --freq 915 --lora-port /dev/serial/by-id/...
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import argparse
 import json
 import math
 import time
+from pathlib import Path
 from typing import Optional
 
 import serial
@@ -22,6 +25,7 @@ from serial.tools import list_ports
 
 # Waveshare USB-TO-LoRa uses a WCH CH343 USB-UART (VID 0x1A86).
 CH343_VID = 0x1A86
+BY_ID_DIR = Path("/dev/serial/by-id")
 
 # HF modules: freq_MHz = 850 + channel  →  868→18, 915→65 (915 is in US 902–928)
 FREQ_CHANNELS = {868: 18, 915: 65}
@@ -48,16 +52,48 @@ def log(msg: str) -> None:
     print(f"[car] {msg}", flush=True)
 
 
+def stable_serial_path(device: str) -> str:
+    """Map a tty path to its /dev/serial/by-id symlink when present (Linux)."""
+    if not device or not BY_ID_DIR.is_dir():
+        return device
+    try:
+        # Already a by-id path
+        if Path(device).resolve().parent == BY_ID_DIR.resolve():
+            return device
+        target = Path(device).resolve()
+    except OSError:
+        return device
+    for link in sorted(BY_ID_DIR.iterdir()):
+        try:
+            if link.resolve() == target:
+                return str(link)
+        except OSError:
+            continue
+    return device
+
+
 def find_ch343_port(exclude: Optional[set] = None) -> Optional[str]:
     exclude = exclude or set()
-    for p in list_ports.comports():
-        if p.device in exclude:
+    exclude_resolved = set()
+    for ex in exclude:
+        if not ex:
             continue
+        try:
+            exclude_resolved.add(str(Path(ex).resolve()))
+        except OSError:
+            exclude_resolved.add(ex)
+    for p in list_ports.comports():
+        try:
+            if str(Path(p.device).resolve()) in exclude_resolved:
+                continue
+        except OSError:
+            if p.device in exclude:
+                continue
         vid = p.vid or 0
         desc = (p.description or "").upper()
         mfg = (p.manufacturer or "").upper()
         if vid == CH343_VID or "CH343" in desc or "CH340" in desc or "WCH" in mfg:
-            return p.device
+            return stable_serial_path(p.device)
     return None
 
 
@@ -415,6 +451,11 @@ def read_obd(conn, *, sim: bool, include_dtc: bool = False) -> dict:
 
 
 def main(args: argparse.Namespace) -> None:
+    if args.lora_port:
+        args.lora_port = stable_serial_path(args.lora_port)
+    if args.gps_port:
+        args.gps_port = stable_serial_path(args.gps_port)
+
     gps_required = not args.sim
     mode = "SIM OBD" if args.sim else "live OBD"
     log(f"starting TX ({mode}, {args.freq} MHz)")
@@ -589,10 +630,11 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p.add_argument("--pwr", type=int, default=LORA_PWR_DEFAULT, choices=range(10, 23),
                    metavar="DBM",
                    help=f"LoRa TX power dBm 10–22 (default: {LORA_PWR_DEFAULT})")
-    p.add_argument("--lora-port", default=None, help="USB-TO-LoRa serial device (default: auto CH343)")
+    p.add_argument("--lora-port", default=None,
+                   help="USB-TO-LoRa path (prefer /dev/serial/by-id/...; default: auto CH343)")
     p.add_argument("--lora-baud", type=int, default=115200, help="LoRa USB baud (default: 115200)")
     p.add_argument("--gps-port", default=None,
-                   help="GPS serial device (required unless --sim)")
+                   help="GPS path (prefer /dev/serial/by-id/...; required unless --sim)")
     p.add_argument("--gps-baud", type=int, default=9600, help="GPS baud (default: 9600)")
     p.add_argument("--obd-port", default=None, help="OBD serial device (default: auto-detect; ignored with --sim)")
     p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional)")

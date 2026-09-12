@@ -8,8 +8,11 @@ Type=simple
 User=rnracing
 WorkingDirectory=/home/rnracing/rnracing/car
 ExecStartPre=/bin/sleep 8
-# Prefer /dev/serial/by-id/... for USB LoRa/GPS. OBD is Bluetooth RFCOMM via rnr-obd-bluetooth.service (/dev/obd).
-ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 --lora-port /dev/ttyUSB0 --gps-port /dev/ttyUSB1 --obd-port /dev/obd
+# Set LoRa/GPS from: python3 list_ports.py  (use /dev/serial/by-id/... paths)
+ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 \
+  --lora-port /dev/serial/by-id/REPLACE_LORA \
+  --gps-port /dev/serial/by-id/REPLACE_GPS \
+  --obd-port /dev/obd
 
 Restart=always
 RestartSec=5
