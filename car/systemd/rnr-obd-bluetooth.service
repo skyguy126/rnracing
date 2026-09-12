@@ -7,6 +7,9 @@ Wants=bluetooth.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# oneshot otherwise waits forever if bluetoothctl/rfcomm stall
+TimeoutStartSec=45
+TimeoutStopSec=15
 Environment=OBD_BT_CONF=/home/rnracing/rnracing/car/obd_bluetooth.conf
 EnvironmentFile=-/home/rnracing/rnracing/car/obd_bluetooth.conf
 ExecStart=/home/rnracing/rnracing/car/bind_obd_bluetooth.sh

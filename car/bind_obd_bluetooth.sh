@@ -48,30 +48,41 @@ wait_for_hci() {
   return 1
 }
 
+# True when hci0 is already Powered. Does not use bluetoothctl — that client
+# stays attached to BlueZ and never exits, even if power on already succeeded.
+hci_powered() {
+  timeout 3 busctl get-property org.bluez /org/bluez/hci0 org.bluez.Adapter1 Powered 2>/dev/null \
+    | grep -q 'b true'
+}
+
 ensure_powered() {
   rfkill unblock bluetooth 2>/dev/null || true
-  bluetoothctl power on >/dev/null
-  # Prefer classic SPP for ELM327-class adapters
+  if hci_powered; then
+    log "hci0 already powered"
+    return 0
+  fi
+  log "powering hci0"
+  timeout 10 bluetoothctl --timeout 8 power on >/dev/null 2>&1 || true
   if command -v btmgmt >/dev/null 2>&1; then
-    btmgmt --index 0 power on >/dev/null 2>&1 || true
+    timeout 8 btmgmt --index 0 power on >/dev/null 2>&1 || true
   fi
 }
 
 already_bound_to_mac() {
   # rfcomm show: "rfcomm0: AA:BB:CC:DD:EE:FF channel 1 clean"
   local line
-  line="$(rfcomm show "${RFCOMM_N}" 2>/dev/null || true)"
+  line="$(timeout 5 rfcomm show "${RFCOMM_N}" 2>/dev/null || true)"
   [[ "${line}" == *"${MAC}"* ]]
 }
 
 release_bind() {
-  rfcomm release "${RFCOMM_N}" 2>/dev/null || true
+  timeout 5 rfcomm release "${RFCOMM_N}" 2>/dev/null || true
 }
 
 bind_rfcomm() {
   # Create /dev/rfcommN permanently bound to this MAC+channel.
   # Opening the device triggers the BlueZ SPP connection.
-  rfcomm bind "${RFCOMM_N}" "${MAC}" "${OBD_RFCOMM_CHANNEL}"
+  timeout 10 rfcomm bind "${RFCOMM_N}" "${MAC}" "${OBD_RFCOMM_CHANNEL}"
 }
 
 # Ensure dialout can open the node after bind (some images create it as root:root)

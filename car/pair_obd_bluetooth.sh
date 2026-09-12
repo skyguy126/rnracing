@@ -38,7 +38,9 @@ log() { echo "[rnr-obd-pair] $*"; }
 source "${SCRIPT_DIR}/pyenv_python.sh"
 
 rfkill unblock bluetooth 2>/dev/null || true
-bluetoothctl power on >/dev/null
+if ! timeout 3 busctl get-property org.bluez /org/bluez/hci0 org.bluez.Adapter1 Powered 2>/dev/null | grep -q 'b true'; then
+  timeout 10 bluetoothctl --timeout 8 power on >/dev/null 2>&1 || true
+fi
 
 log "Inquiring for ${MAC}, then pairing while BlueZ still has it."
 "$(resolve_python)" "${SCRIPT_DIR}/list_bluetooth.py" --pair "${MAC}"

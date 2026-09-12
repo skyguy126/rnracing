@@ -94,15 +94,21 @@ systemctl enable bluetooth.service 2>/dev/null || true
 systemctl enable rnr-obd-bluetooth.service
 systemctl enable rnr-car.service
 
-# Bind now if MAC is configured; otherwise leave it for pair_obd_bluetooth.sh
-if systemctl start rnr-obd-bluetooth.service; then
+# bluetoothctl power on never returns, even when hci0 is already powered.
+# A oneshot then waits forever (TimeoutStartSec defaults to infinity).
+echo "Starting Bluetooth OBD bind..."
+if timeout 50 systemctl start rnr-obd-bluetooth.service; then
   echo "Bluetooth OBD bind: ok"
 else
-  echo "Bluetooth OBD bind not ready yet — pair first:"
+  echo "Bluetooth OBD bind did not finish in time."
+  echo "  journalctl -u rnr-obd-bluetooth.service -n 30 --no-pager"
   echo "  sudo bash ${SCRIPT_DIR}/pair_obd_bluetooth.sh"
 fi
 
-systemctl restart rnr-car.service
+echo "Starting rnr-car..."
+if ! timeout 60 systemctl restart rnr-car.service; then
+  echo "rnr-car did not finish starting — check: journalctl -u rnr-car.service -n 40 --no-pager"
+fi
 systemctl --no-pager --full status rnr-obd-bluetooth.service rnr-car.service || true
 
 echo
