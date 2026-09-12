@@ -1,30 +1,31 @@
 # RN Racing — Car (Pi)
 
-GPS + OBD → **Waveshare USB-TO-LoRa (SX1262)** stream mode.
+OBD (+ optional GPS) → **Waveshare USB-TO-LoRa (SX1262)** stream mode.
 
-## Setup
+## Setup (once on the Pi)
+
+`install_service.sh` **enables and starts** `rnr-obd-bluetooth` + `rnr-car`. They also **auto-start on every reboot**. You do not manually run `transmit.py` for normal car use.
 
 ```bash
 cd car
 pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh
-sudo bash install_service.sh
 python3 list_ports.py
-sudo systemctl edit --full rnr-car.service   # set REPLACE_LORA / REPLACE_GPS
+sudo bash install_service.sh
+sudo systemctl edit --full rnr-car.service   # set REPLACE_LORA; add --gps-port to enable GPS
+sudo systemctl restart rnr-car.service
+journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
 ```
 
 ```text
 ExecStart=.../transmit.py --freq 915 \
   --lora-port /dev/serial/by-id/... \
-  --gps-port /dev/serial/by-id/... \
   --obd-port /dev/obd
+# optional GPS:  --gps-port /dev/serial/by-id/...
 ```
 
-```bash
-journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
-```
+USB LoRa (and GPS, if used): `/dev/serial/by-id/...` only. OBD: `/dev/obd` (Bluetooth bind). Omit `--gps-port` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width.
 
-USB LoRa/GPS must use `/dev/serial/by-id/...` (not `/dev/ttyUSB*`). OBD is `/dev/obd` via Bluetooth bind.
 
 ### Bluetooth OBD
 
@@ -45,9 +46,9 @@ python3 transmit.py --help
 |------|---------|---------|
 | `--freq` | `915` | `868` or `915` |
 | `--lora-port` | auto CH343 | prefer `/dev/serial/by-id/...` |
-| `--gps-port` | required* | prefer `/dev/serial/by-id/...` (*optional with `--sim`) |
+| `--gps-port` | optional | omit to run without GPS; prefer `/dev/serial/by-id/...` |
 | `--obd-port` | auto | `/dev/obd` on Pi; ignored with `--sim` |
-| `--sim` | off | fake OBD; GPS optional |
+| `--sim` | off | fake OBD |
 | `--interval` | `2.5` | min TX period (s) |
 
 ## Power-loss hardening

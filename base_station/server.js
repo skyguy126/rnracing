@@ -156,6 +156,8 @@ let lastRxAt = 0;
 let serialPath = null;
 let serialOpen = false;
 let programmedPath = null;
+/** Last radio seq, for gap logs. Independent of sticky dashboard state. */
+let lastRxSeq = null;
 
 /** Last-known MIL / DTCs; survive packets that omit these fields. */
 let stickyMil = false;
@@ -245,13 +247,33 @@ async function findLoraPort() {
 function handleLine(line) {
   const text = String(line || "").trim();
   if (!text) return;
+  // Car TX logs include the trailing newline written onto the radio.
+  const bytes = Buffer.byteLength(text, "utf8") + 1;
   let msg;
   try {
     msg = JSON.parse(text);
   } catch {
+    const preview = text.length > 120 ? `${text.slice(0, 120)}…` : text;
+    console.log(`[base] rx junk bytes=${bytes} ${preview}`);
     return;
   }
-  if (!msg || typeof msg !== "object") return;
+  if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
+    console.log(`[base] rx junk bytes=${bytes} not an object`);
+    return;
+  }
+
+  const seq = Number.isInteger(msg.seq) ? msg.seq >>> 0 : null;
+  if (seq != null && lastRxSeq != null && seq !== ((lastRxSeq + 1) >>> 0)) {
+    const expected = (lastRxSeq + 1) >>> 0;
+    const missed = (seq - expected) >>> 0;
+    if (missed > 0 && missed < 10000) {
+      console.log(`[base] rx gap expected=${expected} got=${seq} missed=${missed}`);
+    } else {
+      console.log(`[base] rx seq jump expected=${expected} got=${seq}`);
+    }
+  }
+  if (seq != null) lastRxSeq = seq;
+  console.log(`[base] rx seq=${seq ?? "?"} bytes=${bytes}`);
   ingestTelemetry(msg);
 }
 

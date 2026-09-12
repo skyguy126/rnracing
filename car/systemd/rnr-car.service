@@ -8,10 +8,11 @@ Type=simple
 User=rnracing
 WorkingDirectory=/home/rnracing/rnracing/car
 ExecStartPre=/bin/sleep 8
-# Set LoRa/GPS from: python3 list_ports.py  (use /dev/serial/by-id/... paths)
+# Set LoRa from: python3 list_ports.py  (use /dev/serial/by-id/... paths)
+# GPS is optional. To enable, replace ExecStart with this line (set REPLACE_* the same way):
+# ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 --lora-port /dev/serial/by-id/REPLACE_LORA --gps-port /dev/serial/by-id/REPLACE_GPS --obd-port /dev/obd
 ExecStart=/usr/bin/python3 /home/rnracing/rnracing/car/transmit.py --freq 915 \
   --lora-port /dev/serial/by-id/REPLACE_LORA \
-  --gps-port /dev/serial/by-id/REPLACE_GPS \
   --obd-port /dev/obd
 
 Restart=always

@@ -37,6 +37,7 @@ Car and base must share `--freq` (`868`→ch 18, `915`→ch 65).
 ## Behaviour
 
 - Car → base only; serial blackouts reconnect automatically
+- Each radio frame is logged like the car TX line: `rx seq=… bytes=…` (plus gap/junk)
 - Dashboard: `listening` / `live` / `stale` / `offline`
 - **Start / Stop capture** → CSV; **Reset** clears map path and session values
 

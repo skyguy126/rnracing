@@ -2,12 +2,13 @@
 """
 Car-side telemetry transmitter for Waveshare USB-TO-LoRa (SX1262).
 
-Collects GPS + OBD and writes newline-delimited JSON into the LoRa module's
+Collects OBD and optional GPS and writes newline-delimited JSON into the LoRa module's
 USB serial port (stream / transparent mode). TX-only — no RX path.
 
   python3 list_ports.py   # copy /dev/serial/by-id/... paths
   python3 transmit.py --freq 915 \\
-    --lora-port /dev/serial/by-id/... --gps-port /dev/serial/by-id/... --obd-port /dev/obd
+    --lora-port /dev/serial/by-id/... --obd-port /dev/obd
+  # optional GPS: add --gps-port /dev/serial/by-id/...
   python3 transmit.py --sim --freq 915 --lora-port /dev/serial/by-id/...
 """
 
@@ -206,14 +207,47 @@ def estimate_payload_bytes_with_dtcs(n_codes: int = 6) -> int:
     return len(pack_telemetry_line(sample).encode("utf-8"))
 
 
-def pack_telemetry_line(payload: dict, max_bytes: int = 240) -> str:
+# Same JSON width as a typical fix (estimate_payload_bytes). Used when --gps-port
+# is omitted so the on-air line does not shrink.
+_GPS_FIX_PAIR = json.dumps({"lat": 38.161234, "lon": -122.454567}, separators=(",", ":"))[1:-1]
+_GPS_ABSENT_PAIR = '"lat":null,"lon":null'
+_GPS_ABSENT_PAD = " " * (len(_GPS_FIX_PAIR) - len(_GPS_ABSENT_PAIR))
+
+
+def _line_with_gps_width(line: str, *, gps_absent: bool) -> str:
+    """Keep lat/lon the same width as a typical fix when GPS is not configured."""
+    if not gps_absent:
+        return line
+    slot = _GPS_ABSENT_PAIR + _GPS_ABSENT_PAD
+    if '"lat":null,"lon":null' not in line:
+        raise RuntimeError("GPS-absent packet missing lat/lon slot")
+    return line.replace('"lat":null,"lon":null', slot, 1)
+
+
+def pack_telemetry_line(payload: dict, max_bytes: int = 240, *, gps_absent: bool = False) -> str:
     """
     Build a LoRa JSON line ≤ max_bytes.
 
     DTC descriptions are never sent over the air (codes only). If still over
     budget, drop secondary OBD fields, then cap the DTC list.
+
+    When GPS is not configured, lat/lon are null and padded to a typical fix
+    width so the line does not get shorter.
     """
     body = dict(payload)
+    if gps_absent:
+        ordered = {}
+        for key, value in body.items():
+            if key in ("lat", "lon", "gps_speed"):
+                continue
+            ordered[key] = value
+            if key == "ts":
+                ordered["lat"] = None
+                ordered["lon"] = None
+        if "lat" not in ordered:
+            ordered["lat"] = None
+            ordered["lon"] = None
+        body = ordered
     if "dtcs" in body:
         codes = []
         for item in body.get("dtcs") or []:
@@ -224,7 +258,8 @@ def pack_telemetry_line(payload: dict, max_bytes: int = 240) -> str:
         body["dtcs"] = codes
 
     def dumps(obj: dict) -> str:
-        return json.dumps(obj, separators=(",", ":")) + "\n"
+        line = json.dumps(obj, separators=(",", ":")) + "\n"
+        return _line_with_gps_width(line, gps_absent=gps_absent)
 
     line = dumps(body)
     if len(line) <= max_bytes:
@@ -456,7 +491,8 @@ def main(args: argparse.Namespace) -> None:
     if args.gps_port:
         args.gps_port = stable_serial_path(args.gps_port)
 
-    gps_required = not args.sim
+    gps_required = bool(args.gps_port) and not args.sim
+    gps_absent = not args.gps_port
     mode = "SIM OBD" if args.sim else "live OBD"
     log(f"starting TX ({mode}, {args.freq} MHz)")
     if gps_required:
@@ -464,7 +500,7 @@ def main(args: argparse.Namespace) -> None:
     elif args.gps_port:
         log(f"GPS optional (sim) on {args.gps_port} @ {args.gps_baud}")
     else:
-        log("GPS disabled (sim mode, no --gps-port)")
+        log("GPS disabled (no --gps-port)")
     log_link_budget(args.pwr, args.interval)
 
     lora: Optional[serial.Serial] = None
@@ -551,10 +587,6 @@ def main(args: argparse.Namespace) -> None:
                     if gps_required:
                         time.sleep(args.reconnect)
                         continue
-        elif gps_required:
-            # Defensive: parse_args should have rejected this already
-            log("GPS required but --gps-port missing; exiting")
-            raise SystemExit(2)
 
         if obd_conn is None or not obd_conn.is_connected():
             if loop_start >= next_obd_try:
@@ -590,7 +622,7 @@ def main(args: argparse.Namespace) -> None:
         else:
             payload.pop("gps_speed", None)
 
-        line = pack_telemetry_line(payload)
+        line = pack_telemetry_line(payload, gps_absent=gps_absent)
 
         try:
             line_bytes = line.encode("utf-8")
@@ -624,7 +656,7 @@ def main(args: argparse.Namespace) -> None:
 def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="RN Racing car LoRa telemetry TX")
     p.add_argument("--sim", action="store_true",
-                   help="Use obd_sim instead of a real OBD adapter; GPS becomes optional")
+                   help="Use obd_sim instead of a real OBD adapter")
     p.add_argument("--freq", type=int, choices=sorted(FREQ_CHANNELS), default=915,
                    help="LoRa band MHz; programs module via AT (default: 915)")
     p.add_argument("--pwr", type=int, default=LORA_PWR_DEFAULT, choices=range(10, 23),
@@ -634,17 +666,14 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
                    help="USB-TO-LoRa path (prefer /dev/serial/by-id/...; default: auto CH343)")
     p.add_argument("--lora-baud", type=int, default=115200, help="LoRa USB baud (default: 115200)")
     p.add_argument("--gps-port", default=None,
-                   help="GPS path (prefer /dev/serial/by-id/...; required unless --sim)")
+                   help="GPS path (prefer /dev/serial/by-id/...; omit to run without GPS)")
     p.add_argument("--gps-baud", type=int, default=9600, help="GPS baud (default: 9600)")
     p.add_argument("--obd-port", default=None, help="OBD serial device (default: auto-detect; ignored with --sim)")
     p.add_argument("--obd-baud", type=int, default=None, help="OBD baud (optional)")
     p.add_argument("--interval", type=float, default=DEFAULT_TX_INTERVAL_S,
                    help=f"Minimum TX period seconds (default: {DEFAULT_TX_INTERVAL_S}; raised for SF10 airtime)")
     p.add_argument("--reconnect", type=float, default=2.0, help="Serial reconnect delay seconds")
-    args = p.parse_args(argv)
-    if not args.sim and not args.gps_port:
-        p.error("--gps-port is required unless --sim")
-    return args
+    return p.parse_args(argv)
 
 
 if __name__ == "__main__":
