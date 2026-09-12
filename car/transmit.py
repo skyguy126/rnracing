@@ -5,11 +5,12 @@ Car-side telemetry transmitter for Waveshare USB-TO-LoRa (SX1262).
 Collects OBD and optional GPS and writes newline-delimited JSON into the LoRa module's
 USB serial port (stream / transparent mode). TX-only — no RX path.
 
-  python3 list_ports.py   # copy /dev/serial/by-id/... paths
-  python3 transmit.py --freq 915 \\
-    --lora-port /dev/serial/by-id/... --obd-port /dev/obd
+The Waveshare dongle is the only CH343 on the Pi; the port is discovered on each
+connect (the by-id serial string is not stable on this chip).
+
+  python3 transmit.py --freq 915 --obd-port /dev/obd
   # optional GPS: add --gps-port /dev/serial/by-id/...
-  python3 transmit.py --sim --freq 915 --lora-port /dev/serial/by-id/...
+  python3 transmit.py --sim --freq 915
 """
 
 from __future__ import annotations
@@ -74,28 +75,33 @@ def stable_serial_path(device: str) -> str:
 
 
 def find_ch343_port(exclude: Optional[set] = None) -> Optional[str]:
+    """Live tty of the Waveshare CH343. Rescanned on every open — do not pin by-id."""
     exclude = exclude or set()
-    exclude_resolved = set()
+    blocked = set()
     for ex in exclude:
         if not ex:
             continue
         try:
-            exclude_resolved.add(str(Path(ex).resolve()))
+            blocked.add(str(Path(ex).resolve()))
         except OSError:
-            exclude_resolved.add(ex)
+            blocked.add(ex)
+    found = []
     for p in list_ports.comports():
         try:
-            if str(Path(p.device).resolve()) in exclude_resolved:
+            if str(Path(p.device).resolve()) in blocked:
                 continue
         except OSError:
             if p.device in exclude:
                 continue
         vid = p.vid or 0
-        desc = (p.description or "").upper()
-        mfg = (p.manufacturer or "").upper()
-        if vid == CH343_VID or "CH343" in desc or "CH340" in desc or "WCH" in mfg:
-            return stable_serial_path(p.device)
-    return None
+        hay = f"{p.description or ''} {p.manufacturer or ''}".upper()
+        if vid == CH343_VID or "CH343" in hay or "CH340" in hay or "WCH" in hay:
+            found.append(p.device)
+    if not found:
+        return None
+    if len(found) > 1:
+        log(f"multiple CH343 ports {found}; using {found[0]}")
+    return found[0]
 
 
 def open_serial(path: str, baud: int) -> serial.Serial:
@@ -486,8 +492,6 @@ def read_obd(conn, *, sim: bool, include_dtc: bool = False) -> dict:
 
 
 def main(args: argparse.Namespace) -> None:
-    if args.lora_port:
-        args.lora_port = stable_serial_path(args.lora_port)
     if args.gps_port:
         args.gps_port = stable_serial_path(args.gps_port)
 
@@ -520,7 +524,7 @@ def main(args: argparse.Namespace) -> None:
 
         if lora is None or not lora.is_open:
             exclude = {args.gps_port, args.obd_port} - {None}
-            port = args.lora_port or find_ch343_port(exclude=exclude)
+            port = find_ch343_port(exclude=exclude)
             if not port:
                 log("LoRa port not found; retrying")
                 time.sleep(args.reconnect)
@@ -662,8 +666,6 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p.add_argument("--pwr", type=int, default=LORA_PWR_DEFAULT, choices=range(10, 23),
                    metavar="DBM",
                    help=f"LoRa TX power dBm 10–22 (default: {LORA_PWR_DEFAULT})")
-    p.add_argument("--lora-port", default=None,
-                   help="USB-TO-LoRa path (prefer /dev/serial/by-id/...; default: auto CH343)")
     p.add_argument("--lora-baud", type=int, default=115200, help="LoRa USB baud (default: 115200)")
     p.add_argument("--gps-port", default=None,
                    help="GPS path (prefer /dev/serial/by-id/...; omit to run without GPS)")

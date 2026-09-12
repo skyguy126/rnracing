@@ -62,11 +62,9 @@ systemctl restart rnr-car.service
 systemctl --no-pager --full status rnr-obd-bluetooth.service rnr-car.service || true
 
 echo
-echo "Installed."
-echo "  Set the LoRa by-id path in the unit (from: python3 ${SCRIPT_DIR}/list_ports.py):"
+echo "Installed. LoRa is auto-detected (the single CH343)."
+echo "  GPS is optional — add --gps-port /dev/serial/by-id/... (from: python3 ${SCRIPT_DIR}/list_ports.py):"
 echo "    sudo systemctl edit --full rnr-car.service"
-echo "    replace REPLACE_LORA with /dev/serial/by-id/..."
-echo "    GPS is optional — add --gps-port /dev/serial/by-id/... to enable"
 echo "  OBD logs:  journalctl -u rnr-obd-bluetooth.service -f"
 echo "  Car logs:  journalctl -u rnr-car.service -f"
 echo "  First-time OBD pair (once): sudo bash ${SCRIPT_DIR}/pair_obd_bluetooth.sh"

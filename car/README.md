@@ -10,22 +10,17 @@ OBD (+ optional GPS) → **Waveshare USB-TO-LoRa (SX1262)** stream mode.
 cd car
 pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh
-python3 list_ports.py
 python3 list_bluetooth.py                  # scan ~20s, print nearby Bluetooth devices
-sudo bash install_service.sh
-sudo systemctl edit --full rnr-car.service   # set REPLACE_LORA; add --gps-port to enable GPS
-sudo systemctl restart rnr-car.service
+sudo bash install_service.sh               # LoRa is the only CH343; no port to set
 journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
 ```
 
 ```text
-ExecStart=.../transmit.py --freq 915 \
-  --lora-port /dev/serial/by-id/... \
-  --obd-port /dev/obd
+ExecStart=.../transmit.py --freq 915 --obd-port /dev/obd
 # optional GPS:  --gps-port /dev/serial/by-id/...
 ```
 
-USB LoRa (and GPS, if used): `/dev/serial/by-id/...` only. OBD: `/dev/obd` (Bluetooth bind). Omit `--gps-port` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width.
+LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343 serial string is not stable). OBD: `/dev/obd` (Bluetooth bind). GPS, if used, still wants a by-id path from `python3 list_ports.py`. Omit `--gps-port` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width.
 
 
 ### Bluetooth OBD
@@ -46,7 +41,6 @@ python3 transmit.py --help
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--freq` | `915` | `868` or `915` |
-| `--lora-port` | auto CH343 | prefer `/dev/serial/by-id/...` |
 | `--gps-port` | optional | omit to run without GPS; prefer `/dev/serial/by-id/...` |
 | `--obd-port` | auto | `/dev/obd` on Pi; ignored with `--sim` |
 | `--sim` | off | fake OBD |
@@ -62,10 +56,9 @@ sudo bash unharden_sdcard.sh && sudo reboot
 
 ## Laptop dual-radio test
 
-Two dongles, same `--freq`. Copy by-id paths from `list_ports.py` (Windows: `COMx`).
+Two dongles, same `--freq`. Transmit opens the only CH343 it sees, so start it with just the TX dongle plugged in, then plug in RX. Base station still takes a port (Windows: `COMx`).
 
 ```bash
-python3 car/list_ports.py
-python3 car/transmit.py --sim --freq 915 --lora-port /dev/serial/by-id/...
+python3 car/transmit.py --sim --freq 915
 cd base_station && npm start -- --freq 915 --lora-port /dev/serial/by-id/...
 ```

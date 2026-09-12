@@ -7,7 +7,7 @@ LoRa telemetry from the car (Raspberry Pi) to a laptop base station using **Wave
 | Car | [`car/`](car/) | OBD (+ optional GPS) → LoRa TX |
 | Base | [`base_station/`](base_station/) | LoRa RX → Node dashboard |
 
-Same `--freq` on both sides. USB serial ports: use `/dev/serial/by-id/...` from `python3 car/list_ports.py` or `npm run list-ports` (stable across reboot). Windows: `COMx`.
+Same `--freq` on both sides. The car finds its LoRa dongle (the only CH343 on the Pi). GPS and the base station still want `/dev/serial/by-id/...` from `python3 car/list_ports.py` or `npm run list-ports`. Windows base: `COMx`.
 
 ## Car
 
@@ -19,12 +19,11 @@ Do this once. After that, **every reboot auto-starts** telemetry — you do not 
 cd car
 pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh          # once: pair OBD (adapter powered)
-python3 list_ports.py                    # note LoRa /dev/serial/by-id/... (GPS too, if used)
 python3 list_bluetooth.py                # scan ~20s, print nearby Bluetooth devices
-sudo bash install_service.sh             # enables + starts services now and on every boot
-sudo systemctl edit --full rnr-car.service   # set REPLACE_LORA; add --gps-port to enable GPS
-sudo systemctl restart rnr-car.service
+sudo bash install_service.sh             # enables + starts; LoRa is auto-detected
 ```
+
+GPS is optional. To enable, `sudo systemctl edit --full rnr-car.service` and add `--gps-port /dev/serial/by-id/...` (from `python3 list_ports.py`), then `sudo systemctl restart rnr-car.service`.
 
 Optional SD hardening: `sudo bash harden_sdcard.sh && sudo reboot`. Before Pi updates: `unharden_sdcard.sh` then harden again. Details: [`car/README.md`](car/README.md).
 
@@ -35,10 +34,8 @@ Logs anytime: `journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f`
 Not needed on the Pi after setup. Use for bench tests:
 
 ```bash
-# No GPS (same flags the systemd unit uses)
-python3 transmit.py --freq 915 --pwr 22 \
-  --lora-port /dev/serial/by-id/... \
-  --obd-port /dev/obd
+# No GPS (same flags the systemd unit uses). LoRa is the only CH343.
+python3 transmit.py --freq 915 --pwr 22 --obd-port /dev/obd
 
 # With GPS — add --gps-port /dev/serial/by-id/...
 # Sim OBD: add --sim (GPS still optional)

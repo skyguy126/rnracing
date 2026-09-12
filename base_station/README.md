@@ -44,9 +44,8 @@ Car and base must share `--freq` (`868`→ch 18, `915`→ch 65).
 ## Dual-dongle laptop test
 
 ```bash
-# Linux
-python3 ../car/list_ports.py
-python3 ../car/transmit.py --sim --freq 915 --lora-port /dev/serial/by-id/...
+# Linux — transmit opens the only CH343, so plug TX first, then RX
+python3 ../car/transmit.py --sim --freq 915
 npm start -- --freq 915 --lora-port /dev/serial/by-id/...
 
 # Windows (base RX; car TX also on Windows if testing both)
