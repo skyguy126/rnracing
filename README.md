@@ -4,10 +4,10 @@ LoRa telemetry from the car (Raspberry Pi) to a laptop base station using **Wave
 
 | Side | Path | Role |
 |------|------|------|
-| Car | [`car/`](car/) | OBD (+ optional GPS) → LoRa TX |
+| Car | [`car/`](car/) | OBD (+ GPS if present) → LoRa TX |
 | Base | [`base_station/`](base_station/) | LoRa RX → Node dashboard |
 
-Same `--freq` on both sides. The car finds its LoRa dongle (the only CH343 on the Pi). With `--gps` it binds the other USB serial adapter. The base station still wants `/dev/serial/by-id/...` from `npm run list-ports`. Windows base: `COMx`.
+Same `--freq` on both sides. The car finds its LoRa dongle (the only CH343 on the Pi) and, if present at start, the other USB serial adapter as GPS. The base station still wants `/dev/serial/by-id/...` from `npm run list-ports`. Windows base: `COMx`.
 
 ## Car
 
@@ -21,12 +21,9 @@ pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh          # once: pair OBD (adapter powered)
 python3 list_bluetooth.py                # scan ~20s, print nearby Bluetooth devices
 sudo bash install_service.sh             # enables + starts rnr-obd-bluetooth and rnr-car
-# optional GPS — the other USB serial (not the LoRa CH343)
-sudo systemctl edit --full rnr-car.service   # add --gps
-sudo systemctl restart rnr-car.service
 ```
 
-GPS is optional. LoRa is auto-detected (the only CH343). Skip the `systemctl edit` line to run without GPS. With `--gps`, transmit will not start until that other adapter is present.
+LoRa is auto-detected (the only CH343). GPS is the other USB serial adapter, if it is present when transmit starts; otherwise a log is written and GPS is not used.
 
 `.python-version` is in the repo root, not `car/`. Re-run `sudo bash install_service.sh` to refresh the units and deps (no uninstall or reboot).
 
@@ -49,11 +46,8 @@ sudo bash unharden_sdcard.sh && sudo reboot
 Not needed on the Pi after setup. Use for bench tests:
 
 ```bash
-# No GPS (same flags the systemd unit uses). LoRa is the only CH343.
+# LoRa is the only CH343. GPS binds if the other USB serial is present.
 python3 transmit.py --freq 915 --pwr 22
-
-# With GPS — the other USB serial adapter. Missing adapter is an error, not a skip.
-python3 transmit.py --freq 915 --gps
 # Sim OBD: add --sim
 ```
 
@@ -87,7 +81,7 @@ Newline-delimited JSON over LoRa stream mode, 115200 8N1:
 {"type":"tel","seq":42,"ts":1725800000,"lat":38.16123,"lon":-122.45456,"speed":75,"rpm":6500,"coolant_temp":92,"throttle":55,"engine_load":70,"fuel_level":40,"mil":true,"dtcs":[{"code":"P0301","desc":"Cylinder 1 Misfire Detected"}]}
 ```
 
-`speed` is mph. `mil` / `dtcs` from OBD (~5s). Missing sensors are omitted. Without `--gps`, `lat`/`lon` are still sent as `null` padded to a typical fix width so the line does not shrink. Both ends reconnect after power-cycle.
+`speed` is mph. `mil` / `dtcs` from OBD (~5s). Missing sensors are omitted. If no GPS adapter is present at start, `lat`/`lon` are still sent as `null` padded to a typical fix width so the line does not shrink. Both ends reconnect after power-cycle.
 
 ## Link rate (SF10 / 125 kHz / 4/5)
 

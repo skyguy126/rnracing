@@ -8,13 +8,12 @@ Type=simple
 User=rnracing
 WorkingDirectory=/home/rnracing/rnracing/car
 # First start after boot only (/run is wiped on reboot). Waits until the
-# Bluetooth bind unit has finished, then gives USB LoRa and the OBD adapter
-# time to enumerate. Later restarts in the same boot do not wait.
+# Bluetooth bind unit has finished, then gives USB LoRa, GPS, and the OBD
+# adapter time to enumerate. Later restarts in the same boot do not wait.
 ExecStartPre=+/bin/sh -c 'stamp=/run/rnr-car.settled; up=$(cut -d. -f1 /proc/uptime); if [ "$$up" -lt 180 ] && [ ! -e "$$stamp" ]; then echo "[car] waiting 15s after boot for USB and Bluetooth to settle"; sleep 15; fi; touch "$$stamp"'
-# LoRa is the only CH343; transmit.py finds it. GPS is optional.
-# Add --gps to bind the other USB serial adapter (retries and does not send if it is missing).
+# LoRa is the only CH343; transmit.py finds it. GPS is the other USB serial
+# adapter if present at start; otherwise a log and no GPS.
 # pyenv_python.sh uses .python-version in the repo root (parent of car/).
-# ExecStart=/home/rnracing/rnracing/car/pyenv_python.sh /home/rnracing/rnracing/car/transmit.py --freq 915 --gps
 ExecStart=/home/rnracing/rnracing/car/pyenv_python.sh /home/rnracing/rnracing/car/transmit.py --freq 915
 
 Restart=always

@@ -1,10 +1,10 @@
 # RN Racing — Car (Pi)
 
-OBD (+ optional GPS) → **Waveshare USB-TO-LoRa (SX1262)** stream mode.
+OBD (+ GPS if present) → **Waveshare USB-TO-LoRa (SX1262)** stream mode.
 
 ## Setup (once on the Pi)
 
-`install_service.sh` **enables and starts** `rnr-obd-bluetooth` + `rnr-car`. They also **auto-start on every reboot**. On boot, `rnr-car` starts after the Bluetooth bind, then waits 15s so the LoRa dongle and OBD adapter can enumerate. A later restart in the same boot does not wait. You do not manually run `transmit.py` for normal car use.
+`install_service.sh` **enables and starts** `rnr-obd-bluetooth` + `rnr-car`. They also **auto-start on every reboot**. On boot, `rnr-car` starts after the Bluetooth bind, then waits 15s so the LoRa dongle, GPS, and OBD adapter can enumerate. A later restart in the same boot does not wait. You do not manually run `transmit.py` for normal car use.
 
 `.python-version` is in the repo root (parent of `car/`). Re-run install to refresh units and deps into that interpreter — no uninstall or reboot needed.
 
@@ -14,9 +14,6 @@ pip install -r requirements.txt
 sudo bash pair_obd_bluetooth.sh
 python3 list_bluetooth.py                  # scan ~20s, print nearby Bluetooth devices
 sudo bash install_service.sh               # LoRa is the only CH343; no port to set
-# optional GPS — the other USB serial (not the LoRa CH343)
-sudo systemctl edit --full rnr-car.service   # add --gps
-sudo systemctl restart rnr-car.service
 journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f
 ```
 
@@ -28,10 +25,9 @@ sudo bash uninstall_service.sh
 
 ```text
 ExecStart=.../pyenv_python.sh .../transmit.py --freq 915
-# optional GPS:  --gps
 ```
 
-LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343 serial string is not stable). OBD is always `/dev/obd`, a symlink the Bluetooth bind service creates onto `/dev/rfcomm0`. GPS, if `--gps` is set, is the other USB serial adapter (not the CH343, not `/dev/obd`). Omit `--gps` to run without GPS; `lat`/`lon` stay in the packet at a typical fix width. If `--gps` is set and that adapter is missing, transmit retries and does not send.
+LoRa is discovered on each connect (do not pin `/dev/serial/by-id` — the CH343 serial string is not stable). OBD is always `/dev/obd`, a symlink the Bluetooth bind service creates onto `/dev/rfcomm0`. GPS is the other USB serial adapter (not the CH343, not `/dev/obd`) if present when transmit starts; otherwise a log is written and GPS is not used, and `lat`/`lon` stay null at a typical fix width.
 
 
 ### Bluetooth OBD
@@ -52,7 +48,6 @@ python3 transmit.py --help
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--freq` | `915` | `868` or `915` |
-| `--gps` | off | bind the other USB serial adapter as GPS; error if it is missing |
 | `--sim` | off | fake OBD (no `/dev/obd`) |
 | `--interval` | `2.5` | min TX period (s) |
 
