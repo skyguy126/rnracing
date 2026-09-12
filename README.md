@@ -28,9 +28,17 @@ sudo systemctl restart rnr-car.service
 
 GPS is optional. LoRa is auto-detected (the only CH343). Skip the `systemctl edit` line to run without GPS. With `--gps`, transmit will not start until that other adapter is present.
 
-Optional SD hardening: `sudo bash harden_sdcard.sh && sudo reboot`. Before Pi updates: `unharden_sdcard.sh` then harden again. Details: [`car/README.md`](car/README.md).
-
 Logs anytime: `journalctl -u rnr-obd-bluetooth.service -u rnr-car.service -f`
+
+### SD hardening (optional)
+
+Details: [`car/README.md`](car/README.md).
+
+```bash
+sudo bash harden_sdcard.sh && sudo reboot
+# before Pi updates, then harden again afterward:
+sudo bash unharden_sdcard.sh && sudo reboot
+```
 
 ### Manual / sim (laptop or debug only)
 
