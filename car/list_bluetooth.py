@@ -172,6 +172,8 @@ def main() -> int:
         print("bluetoothctl not found (install bluez)", file=sys.stderr)
         return 1
 
+    subprocess.run(["rfkill", "unblock", "bluetooth"], check=False, capture_output=True)
+
     print(f"Scanning Bluetooth for {secs}s...", file=sys.stderr)
     try:
         found, scan_error = scan(secs)
