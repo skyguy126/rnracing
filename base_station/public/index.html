@@ -4,6 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RN Telemetry</title>
+    <script>
+      try {
+        document.documentElement.setAttribute(
+          "data-theme",
+          localStorage.getItem("rnr-theme") === "light" ? "light" : "dark"
+        );
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    </script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/style.css" />
   </head>
@@ -40,6 +50,37 @@
         </div>
       </div>
       <div class="top-actions">
+        <label class="track-select" for="trackSelect">
+          <span>Track</span>
+          <select id="trackSelect" aria-label="Track">
+            <option value="buttonwillow" selected>BUTTONWILLOW</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          id="themeToggle"
+          class="theme-toggle"
+          aria-pressed="true"
+          aria-label="Switch to light mode"
+        >
+          <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" fill="currentColor" />
+            <path
+              d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M18.9 5.1l-1.6 1.6M6.7 17.3l-1.6 1.6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+          <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M15.5 3.2a8.2 8.2 0 1 0 5.3 12.6A7.2 7.2 0 0 1 15.5 3.2z"
+            />
+          </svg>
+          <span id="themeLabel">Dark</span>
+        </button>
         <label class="interp-toggle" for="interpToggle">
           <input type="checkbox" id="interpToggle" />
           <span>Interpolate</span>
@@ -150,7 +191,7 @@
 
     <section class="map-section" aria-label="Track map">
       <div class="map-head">
-        <div class="label">Path</div>
+        <div class="label" id="mapTitle">BUTTONWILLOW</div>
         <button type="button" id="resetViewBtn" class="reset-btn reset-view-btn">Reset view</button>
       </div>
       <div id="map" class="map"></div>
@@ -173,6 +214,7 @@
     </footer>
 
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
+    <script src="/tracks.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

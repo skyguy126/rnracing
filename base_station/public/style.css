@@ -1,5 +1,7 @@
-:root {
+:root,
+html[data-theme="dark"] {
   /* rnracing.org palette; keep dashboard fonts (more readable than site display fonts) */
+  color-scheme: dark;
   --black: #09090b;
   --white: #fafafa;
   --blue: #3b82f6;
@@ -14,8 +16,28 @@
   --stale: #fbbf24;
   --offline: #ef4444;
   --line: #27272a;
+  --panel: rgba(9, 9, 11, 0.25);
   --font-display: "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "Cascadia Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --black: #09090b;
+  --white: #fafafa;
+  --blue: #2563eb;
+  --blue-soft: #1d4ed8;
+  --bg0: #f4f4f5;
+  --bg1: #ffffff;
+  --ink: #18181b;
+  --muted: #52525b;
+  --accent: var(--blue);
+  --accent-hover: var(--blue-soft);
+  --live: #059669;
+  --stale: #d97706;
+  --offline: #dc2626;
+  --line: #d4d4d8;
+  --panel: rgba(255, 255, 255, 0.72);
 }
 
 * {
@@ -167,8 +189,97 @@ body {
 .top-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.75rem;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.track-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--bg1);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.55rem 0.35rem 0.75rem;
+}
+
+.track-select select {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  max-width: 16rem;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 1.4rem 0.15rem 0.15rem;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 10px) 55%, calc(100% - 5px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.track-select select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--bg1);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.theme-toggle svg {
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
+}
+
+.theme-toggle .theme-icon-sun {
+  display: none;
+}
+
+html[data-theme="light"] .theme-toggle .theme-icon-moon {
+  display: none;
+}
+
+html[data-theme="light"] .theme-toggle .theme-icon-sun {
+  display: block;
 }
 
 .interp-toggle {
@@ -368,6 +479,10 @@ body {
   background: rgba(239, 68, 68, 0.12);
 }
 
+html[data-theme="light"] .capture-btn.recording {
+  color: #991b1b;
+}
+
 .capture-btn.recording .capture-dot {
   background: var(--offline);
   animation: capture-pulse 1.2s ease-in-out infinite;
@@ -480,7 +595,7 @@ body {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   border: 1px solid rgba(161, 161, 170, 0.28);
-  background: rgba(9, 9, 11, 0.25);
+  background: var(--panel);
   overflow: hidden;
 }
 
@@ -597,7 +712,7 @@ body {
   overflow-y: auto;
   flex: 1;
   border: 1px solid rgba(161, 161, 170, 0.28);
-  background: rgba(9, 9, 11, 0.25);
+  background: var(--panel);
 }
 
 .lap-list:empty {
@@ -756,35 +871,121 @@ body {
 }
 
 .car-marker-root {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  width: 16px;
+  height: 16px;
 }
 
 .car-marker {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--white);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+  background: #ef4444;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.35);
 }
 
-/* Mapbox attribution stays readable on dark UI */
+.car-marker.live {
+  background: #34d399;
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.4);
+}
+
+.car-marker.stale,
+.car-marker.listening {
+  background: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.4);
+}
+
+.car-marker.offline {
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.35);
+}
+
+.car-marker-root.car-age-left .car-age {
+  left: auto;
+  right: calc(100% + 8px);
+}
+
+.car-age {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg1);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+/* Mapbox attribution stays readable on either theme */
 .mapboxgl-ctrl-attrib,
 .mapboxgl-ctrl-attrib a {
   color: #a1a1aa !important;
 }
 
+html[data-theme="light"] .mapboxgl-ctrl-attrib,
+html[data-theme="light"] .mapboxgl-ctrl-attrib a {
+  color: #3f3f46 !important;
+}
+
 @media (max-width: 800px) {
   .top {
     flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .top-actions {
+    display: contents;
+  }
+
+  .brand {
+    order: 1;
+  }
+
+  .theme-toggle {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .track-select {
+    order: 3;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .track-select select {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .interp-toggle {
+    order: 4;
+  }
+
+  .reset-btn {
+    order: 5;
+  }
+
+  .link-wrap {
+    order: 6;
+    margin-left: auto;
   }
 
   .top-mid {
-    order: 3;
+    order: 7;
     flex: 1 1 100%;
     justify-content: space-between;
     padding-top: 0.35rem;
@@ -823,6 +1024,33 @@ body {
   .hero-metrics {
     grid-template-columns: 1fr;
   }
+
+  .theme-toggle,
+  .reset-btn,
+  .interp-toggle,
+  .link {
+    min-height: 44px;
+  }
+
+  .map {
+    height: clamp(280px, 55vh, 480px);
+  }
+}
+
+@media (pointer: coarse) {
+  .theme-toggle,
+  .reset-btn,
+  .interp-toggle,
+  .capture-btn,
+  .lap-btn,
+  .link {
+    min-height: 44px;
+  }
+
+  .car-age {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.45rem;
+  }
 }
 
 /* Horizontal looping race footer (assets from rnracing.org/timeline) */
@@ -838,12 +1066,7 @@ body {
   overflow: hidden;
   pointer-events: none;
   border-top: 1px solid var(--line);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(17, 17, 20, 0.55) 0%,
-      rgba(9, 9, 11, 0.95) 100%
-    );
+  background: linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
 }
 
 .race-track::before {

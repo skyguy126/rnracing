@@ -30,6 +30,10 @@ const els = {
   resetViewBtn: document.getElementById("resetViewBtn"),
   map: document.getElementById("map"),
   mapNote: document.getElementById("mapNote"),
+  mapTitle: document.getElementById("mapTitle"),
+  trackSelect: document.getElementById("trackSelect"),
+  themeToggle: document.getElementById("themeToggle"),
+  themeLabel: document.getElementById("themeLabel"),
   clock12: document.getElementById("clock12"),
   clock24: document.getElementById("clock24"),
   weatherMain: document.getElementById("weatherMain"),
@@ -62,8 +66,15 @@ const CSV_COLUMNS = [
   "fuel_level",
 ];
 
-const DEFAULT_CENTER = [-122.4546, 38.1612]; // [lon, lat] Sonoma
-const MAX_PATH_POINTS = 5000;
+const THEME_KEY = "rnr-theme";
+const MAP_STYLES = {
+  dark: "mapbox://styles/mapbox/dark-v11",
+  light: "mapbox://styles/mapbox/light-v11",
+};
+
+function defaultTrack() {
+  return TRACKS.find((t) => t.id === "buttonwillow") || TRACKS[0];
+}
 
 const WMO = {
   0: "Clear",
@@ -96,15 +107,17 @@ let capturing = false;
 let captureRows = [];
 let captureStartedAt = 0;
 
-/** @type {[number, number][]} lon,lat */
-let pathCoords = [];
 let map = null;
 let mapReady = false;
+let mapTheme = null;
+let trackFitted = false;
 let carMarker = null;
-let followMap = true;
+/** @type {[number, number]|null} lon, lat of the latest fix */
+let lastGps = null;
+let selectedTrackId = defaultTrack()?.id || null;
 
-let weatherLat = DEFAULT_CENTER[1];
-let weatherLon = DEFAULT_CENTER[0];
+let weatherLat = trackCenter(defaultTrack())[1];
+let weatherLon = trackCenter(defaultTrack())[0];
 let weatherFetchedFor = "";
 let weatherTimer = null;
 
@@ -465,84 +478,203 @@ function resetLapTimer() {
   updateLapButtons();
 }
 
-function pathGeoJson() {
+function selectedTrack() {
+  return TRACKS.find((t) => t.id === selectedTrackId) || defaultTrack();
+}
+
+function trackCenter(track) {
+  const coords = track?.coordinates || [];
+  if (!coords.length) return [-119.5449, 35.4913];
+  let minLon = coords[0][0];
+  let maxLon = coords[0][0];
+  let minLat = coords[0][1];
+  let maxLat = coords[0][1];
+  for (const [lon, lat] of coords) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+}
+
+function trackGeoJson() {
+  const track = selectedTrack();
+  const coordinates = track?.coordinates?.length ? track.coordinates : [];
   return {
     type: "Feature",
-    properties: {},
+    properties: { name: track?.name || "" },
     geometry: {
       type: "LineString",
-      coordinates: pathCoords.length ? pathCoords : [DEFAULT_CENTER, DEFAULT_CENTER],
+      coordinates,
     },
   };
 }
 
-function updateMapPath() {
-  if (!mapReady || !map) return;
-  const src = map.getSource("car-path");
-  if (src) src.setData(pathGeoJson());
+function ageLabel() {
+  if (!lastStatus.lastRxAt) return "—";
+  const age = Math.max(0, Date.now() - lastStatus.lastRxAt);
+  return `${(age / 1000).toFixed(1)}s`;
+}
+
+function updateCarMarkerStatus() {
+  if (!carMarker) return;
+  const root = carMarker.getElement();
+  const dot = root.querySelector(".car-marker");
+  const age = root.querySelector(".car-age");
+  const link = lastStatus.link || "offline";
+  if (dot) dot.className = `car-marker ${link}`;
+  if (age) age.textContent = ageLabel();
 }
 
 function setCarMarker(lon, lat) {
+  lastGps = [lon, lat];
   if (!mapReady || !map) return;
 
   if (!carMarker) {
     const root = document.createElement("div");
     root.className = "car-marker-root";
-    const inner = document.createElement("div");
-    inner.className = "car-marker";
-    root.appendChild(inner);
-    carMarker = new mapboxgl.Marker({ element: root }).setLngLat([lon, lat]).addTo(map);
+    const dot = document.createElement("div");
+    dot.className = "car-marker";
+    const age = document.createElement("div");
+    age.className = "car-age";
+    age.setAttribute("aria-hidden", "true");
+    root.append(dot, age);
+    carMarker = new mapboxgl.Marker({ element: root, anchor: "center" })
+      .setLngLat([lon, lat])
+      .addTo(map);
+  } else {
+    carMarker.setLngLat([lon, lat]);
   }
-
-  carMarker.setLngLat([lon, lat]);
+  updateCarMarkerStatus();
+  placeAgeBadge();
 }
 
-function fitMapToPath(opts = {}) {
-  if (!mapReady || !map || !pathCoords.length) return;
-  if (pathCoords.length === 1) {
-    map.flyTo({ center: pathCoords[0], zoom: 15, essential: true, ...opts });
-    return;
-  }
-  const bounds = pathCoords.reduce(
-    (b, c) => b.extend(c),
-    new mapboxgl.LngLatBounds(pathCoords[0], pathCoords[0])
-  );
-  map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 400, ...opts });
+function placeAgeBadge() {
+  if (!carMarker || !map || !lastGps) return;
+  const point = map.project(lastGps);
+  const width = map.getContainer().clientWidth || 0;
+  carMarker.getElement().classList.toggle("car-age-left", point.x > width - 84);
 }
 
-function appendPathPoint(lat, lon) {
-  const pt = [Number(lon), Number(lat)];
-  if (Number.isNaN(pt[0]) || Number.isNaN(pt[1])) return;
-  const last = pathCoords[pathCoords.length - 1];
-  const moved = !(last && last[0] === pt[0] && last[1] === pt[1]);
-  if (moved) {
-    pathCoords.push(pt);
-    if (pathCoords.length > MAX_PATH_POINTS) pathCoords.shift();
-    updateMapPath();
-    if (followMap) fitMapToPath();
-  }
-  setCarMarker(pt[0], pt[1]);
-}
-
-function clearPath() {
-  pathCoords = [];
-  updateMapPath();
+function clearCarMarker() {
+  lastGps = null;
   if (carMarker) {
     carMarker.remove();
     carMarker = null;
   }
-  followMap = true;
-  if (mapReady && map) {
-    map.easeTo({ center: DEFAULT_CENTER, zoom: 14, duration: 400 });
+}
+
+function addTrackLayers() {
+  if (!map) return;
+  const data = trackGeoJson();
+  if (!map.getSource("track-layout")) {
+    map.addSource("track-layout", { type: "geojson", data });
+  } else {
+    map.getSource("track-layout").setData(data);
+  }
+  if (!map.getLayer("track-layout-casing")) {
+    map.addLayer({
+      id: "track-layout-casing",
+      type: "line",
+      source: "track-layout",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#1d4ed8",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 12, 4, 14, 8, 16, 14],
+        "line-opacity": 0.35,
+      },
+    });
+  }
+  if (!map.getLayer("track-layout-line")) {
+    map.addLayer({
+      id: "track-layout-line",
+      type: "line",
+      source: "track-layout",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#3b82f6",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 12, 2.5, 14, 4.5, 16, 7],
+        "line-opacity": 0.95,
+      },
+    });
   }
 }
 
-function resetMapView() {
-  followMap = true;
-  if (pathCoords.length) fitMapToPath();
-  else if (mapReady && map) {
-    map.easeTo({ center: DEFAULT_CENTER, zoom: 14, duration: 400 });
+function fitTrack(opts = {}) {
+  if (!mapReady || !map) return;
+  const coords = selectedTrack()?.coordinates || [];
+  if (!coords.length) return;
+  const bounds = coords.reduce(
+    (b, c) => b.extend(c),
+    new mapboxgl.LngLatBounds(coords[0], coords[0])
+  );
+  const narrow = window.matchMedia("(max-width: 640px)").matches;
+  map.fitBounds(bounds, {
+    padding: narrow ? 28 : 48,
+    maxZoom: 16,
+    duration: 400,
+    ...opts,
+  });
+}
+
+function applyTrack(id) {
+  const track = TRACKS.find((t) => t.id === id) || defaultTrack();
+  if (!track) return;
+  selectedTrackId = track.id;
+  if (els.trackSelect) els.trackSelect.value = track.id;
+  if (els.mapTitle) els.mapTitle.textContent = track.name;
+  const [lon, lat] = trackCenter(track);
+  if (!(lastData && lastData.lat != null && lastData.lon != null)) {
+    scheduleWeather(lat, lon);
   }
+  if (!mapReady || !map) return;
+  addTrackLayers();
+  trackFitted = true;
+  fitTrack();
+}
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
+function syncMapStyle() {
+  if (!map) return;
+  const theme = currentTheme();
+  if (mapTheme === theme) return;
+  mapTheme = theme;
+  map.setStyle(MAP_STYLES[theme]);
+}
+
+function applyTheme(theme) {
+  const next = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  const light = next === "light";
+  if (els.themeToggle) {
+    els.themeToggle.setAttribute("aria-pressed", light ? "false" : "true");
+    els.themeToggle.setAttribute("aria-label", light ? "Switch to dark mode" : "Switch to light mode");
+  }
+  if (els.themeLabel) els.themeLabel.textContent = light ? "Light" : "Dark";
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {
+    /* ignore */
+  }
+  syncMapStyle();
+}
+
+function initTheme() {
+  applyTheme(currentTheme());
+}
+
+function noteGps(lat, lon) {
+  const pt = [Number(lon), Number(lat)];
+  if (Number.isNaN(pt[0]) || Number.isNaN(pt[1])) return;
+  setCarMarker(pt[0], pt[1]);
+}
+
+function resetMapView() {
+  fitTrack();
 }
 
 async function initMap() {
@@ -563,35 +695,29 @@ async function initMap() {
     return;
   }
 
+  const theme = currentTheme();
+  const center = trackCenter(selectedTrack());
+  mapTheme = theme;
   mapboxgl.accessToken = token;
   map = new mapboxgl.Map({
     container: "map",
-    style: "mapbox://styles/mapbox/dark-v11",
-    center: DEFAULT_CENTER,
-    zoom: 14,
+    style: MAP_STYLES[theme],
+    center,
+    zoom: 13.4,
     attributionControl: true,
   });
   map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+  map.on("move", placeAgeBadge);
 
-  map.on("movestart", (e) => {
-    if (e.originalEvent) followMap = false;
-  });
-
-  map.on("load", () => {
-    map.addSource("car-path", { type: "geojson", data: pathGeoJson() });
-    map.addLayer({
-      id: "car-path-line",
-      type: "line",
-      source: "car-path",
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": "#3b82f6",
-        "line-width": 3.5,
-        "line-opacity": 0.9,
-      },
-    });
+  map.on("style.load", () => {
     mapReady = true;
-    updateMapPath();
+    addTrackLayers();
+    if (lastGps) setCarMarker(lastGps[0], lastGps[1]);
+    if (!trackFitted) {
+      trackFitted = true;
+      map.resize();
+      fitTrack({ duration: 0 });
+    }
   });
 }
 
@@ -603,7 +729,7 @@ function renderTelemetry(data) {
   if ("mil" in data || "dtcs" in data) ingestDtcs(data);
   if (data.lat != null && data.lon != null) {
     els.gps.textContent = `${Number(data.lat).toFixed(5)}, ${Number(data.lon).toFixed(5)}`;
-    appendPathPoint(data.lat, data.lon);
+    noteGps(data.lat, data.lon);
     scheduleWeather(Number(data.lat), Number(data.lon));
   } else {
     els.gps.textContent = "—";
@@ -750,15 +876,12 @@ function renderStatus(st) {
   lastStatus = st;
   setLink(st.link || "offline");
   els.port.textContent = st.serialPath || "—";
+  updateCarMarkerStatus();
 }
 
 function tickAge() {
-  if (!lastStatus.lastRxAt) {
-    els.age.textContent = "—";
-    return;
-  }
-  const age = Math.max(0, Date.now() - lastStatus.lastRxAt);
-  els.age.textContent = `${(age / 1000).toFixed(1)}s`;
+  els.age.textContent = ageLabel();
+  updateCarMarkerStatus();
 }
 
 function formatElapsed(ms) {
@@ -849,7 +972,8 @@ function resetSession() {
   captureStartedAt = 0;
   lastData = null;
   lastStatus = { ...lastStatus, lastRxAt: null };
-  clearPath();
+  clearCarMarker();
+  fitTrack();
   clearMetrics();
   clearDtcCache();
   resetLapTimer();
@@ -869,6 +993,10 @@ els.captureBtn.addEventListener("click", () => {
 els.resetBtn.addEventListener("click", resetSession);
 els.interpToggle.addEventListener("change", () => setInterpolate(els.interpToggle.checked));
 els.resetViewBtn.addEventListener("click", resetMapView);
+els.themeToggle.addEventListener("click", () => {
+  applyTheme(currentTheme() === "light" ? "dark" : "light");
+});
+els.trackSelect.addEventListener("change", () => applyTrack(els.trackSelect.value));
 els.lapStartBtn.addEventListener("click", startLapTimer);
 els.lapStopBtn.addEventListener("click", stopLapTimer);
 els.lapLapBtn.addEventListener("click", markLap);
@@ -934,6 +1062,8 @@ function connect() {
 }
 
 connect();
+initTheme();
+applyTrack(els.trackSelect?.value || selectedTrackId);
 initMap();
 tickClock();
 setInterval(tickClock, 50);
