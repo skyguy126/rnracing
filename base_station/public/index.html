@@ -103,6 +103,36 @@
       </div>
     </header>
 
+    <section class="side-panels live-timing-grid" aria-label="#711 live lap times">
+      <div class="side-panel live-timing-panel">
+        <div class="live-timing-head">
+          <div class="panel-title">#711 Live Lap Times</div>
+          <div
+            id="liveTimingStatus"
+            class="live-timing-status connecting"
+            role="status"
+            aria-live="polite"
+          >CONNECTING</div>
+        </div>
+        <p id="liveTimingWait" class="live-timing-wait">Waiting for car #711 in the live timing feed.</p>
+        <div
+          id="liveTimingTable"
+          class="live-timing-table"
+          role="table"
+          aria-label="#711 completed laps"
+          hidden
+        >
+          <div class="live-timing-row live-timing-cols" role="row">
+            <span role="columnheader">Lap</span>
+            <span role="columnheader">Lap Time</span>
+            <span role="columnheader">Delta</span>
+            <span role="columnheader">Position</span>
+          </div>
+          <div id="liveTimingRows" class="live-timing-rows"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="capture" aria-label="CSV capture">
       <button type="button" id="captureBtn" class="capture-btn" aria-pressed="false">
         <span class="capture-dot" aria-hidden="true"></span>
@@ -216,5 +246,6 @@
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
     <script src="/tracks.js"></script>
     <script src="/app.js"></script>
+    <script type="module" src="/live-timing.js"></script>
   </body>
 </html>
