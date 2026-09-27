@@ -103,36 +103,6 @@
       </div>
     </header>
 
-    <section class="side-panels live-timing-grid" aria-label="#711 live lap times">
-      <div class="side-panel live-timing-panel">
-        <div class="live-timing-head">
-          <div class="panel-title">#711 Live Lap Times</div>
-          <div
-            id="liveTimingStatus"
-            class="live-timing-status connecting"
-            role="status"
-            aria-live="polite"
-          >CONNECTING</div>
-        </div>
-        <p id="liveTimingWait" class="live-timing-wait">Waiting for car #711 in the live timing feed.</p>
-        <div
-          id="liveTimingTable"
-          class="live-timing-table"
-          role="table"
-          aria-label="#711 completed laps"
-          hidden
-        >
-          <div class="live-timing-row live-timing-cols" role="row">
-            <span role="columnheader">Lap</span>
-            <span role="columnheader">Lap Time</span>
-            <span role="columnheader">Delta</span>
-            <span role="columnheader">Position</span>
-          </div>
-          <div id="liveTimingRows" class="live-timing-rows"></div>
-        </div>
-      </div>
-    </section>
-
     <section class="capture" aria-label="CSV capture">
       <button type="button" id="captureBtn" class="capture-btn" aria-pressed="false">
         <span class="capture-dot" aria-hidden="true"></span>
@@ -195,7 +165,7 @@
       </div>
     </section>
 
-    <section class="side-panels" aria-label="Check engine and lap timer">
+    <section class="side-panels" aria-label="Check engine and live lap times">
       <div class="side-panel mil-panel">
         <div class="mil-body">
           <div class="mil-aside">
@@ -206,16 +176,32 @@
         </div>
       </div>
 
-      <div class="side-panel lap-panel">
-        <div class="panel-title">Lap timer</div>
-        <div id="lapDisplay" class="lap-display">00:00.00</div>
-        <div class="lap-actions">
-          <button type="button" id="lapStartBtn" class="lap-btn">Start</button>
-          <button type="button" id="lapStopBtn" class="lap-btn">Stop</button>
-          <button type="button" id="lapLapBtn" class="lap-btn">Lap</button>
-          <button type="button" id="lapResetBtn" class="lap-btn">Reset</button>
+      <div class="side-panel live-timing-panel">
+        <div class="live-timing-head">
+          <div class="panel-title">#711 Live Lap Times</div>
+          <div
+            id="liveTimingStatus"
+            class="live-timing-status connecting"
+            role="status"
+            aria-live="polite"
+          >CONNECTING</div>
         </div>
-        <div id="lapList" class="lap-list"></div>
+        <p id="liveTimingWait" class="live-timing-wait">Waiting for car #711 in the live timing feed.</p>
+        <div
+          id="liveTimingTable"
+          class="live-timing-table"
+          role="table"
+          aria-label="#711 completed laps"
+          hidden
+        >
+          <div class="live-timing-row live-timing-cols" role="row">
+            <span role="columnheader">Lap</span>
+            <span role="columnheader">Lap Time</span>
+            <span role="columnheader">Delta</span>
+            <span role="columnheader">Position</span>
+          </div>
+          <div id="liveTimingRows" class="live-timing-rows"></div>
+        </div>
       </div>
     </section>
 

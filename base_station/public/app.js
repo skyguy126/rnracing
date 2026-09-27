@@ -43,12 +43,6 @@ const els = {
   weatherPrecip: document.getElementById("weatherPrecip"),
   milIcon: document.getElementById("milIcon"),
   dtcList: document.getElementById("dtcList"),
-  lapDisplay: document.getElementById("lapDisplay"),
-  lapList: document.getElementById("lapList"),
-  lapStartBtn: document.getElementById("lapStartBtn"),
-  lapStopBtn: document.getElementById("lapStopBtn"),
-  lapLapBtn: document.getElementById("lapLapBtn"),
-  lapResetBtn: document.getElementById("lapResetBtn"),
 };
 
 const CSV_COLUMNS = [
@@ -375,107 +369,6 @@ function ingestDtcs(data) {
 function clearDtcCache() {
   cachedDtcs.clear();
   paintDtcs();
-}
-
-/* --- Lap timer --- */
-let lapRunning = false;
-let lapStartedAt = 0;
-let lapAccumMs = 0;
-let lapLastMarkAt = 0;
-let lapSplits = [];
-let lapRaf = 0;
-
-function formatLapTime(ms) {
-  const total = Math.max(0, Math.floor(ms));
-  const m = Math.floor(total / 60000);
-  const s = Math.floor((total % 60000) / 1000);
-  const cs = Math.floor((total % 1000) / 10);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
-}
-
-function lapElapsedMs() {
-  if (!lapRunning) return lapAccumMs;
-  return lapAccumMs + (performance.now() - lapStartedAt);
-}
-
-function makeLapRow({ n = "", split = "", total = "" } = {}) {
-  const row = document.createElement("div");
-  row.className = "lap-row";
-  const num = document.createElement("span");
-  num.className = "lap-n";
-  num.textContent = n;
-  const sp = document.createElement("span");
-  sp.className = "lap-split";
-  sp.textContent = split;
-  const tot = document.createElement("span");
-  tot.className = "lap-total";
-  tot.textContent = total;
-  row.append(num, sp, tot);
-  return row;
-}
-
-function renderLapList() {
-  els.lapList.replaceChildren();
-  for (let i = lapSplits.length - 1; i >= 0; i--) {
-    const split = lapSplits[i];
-    els.lapList.appendChild(
-      makeLapRow({
-        n: `L${i + 1}`,
-        split: formatLapTime(split.splitMs),
-        total: formatLapTime(split.totalMs),
-      })
-    );
-  }
-}
-
-function tickLapDisplay() {
-  els.lapDisplay.textContent = formatLapTime(lapElapsedMs());
-  if (lapRunning) lapRaf = requestAnimationFrame(tickLapDisplay);
-}
-
-function updateLapButtons() {
-  els.lapStartBtn.classList.toggle("active", lapRunning);
-  els.lapStartBtn.textContent = lapRunning ? "Running" : lapAccumMs > 0 ? "Resume" : "Start";
-}
-
-function startLapTimer() {
-  if (lapRunning) return;
-  lapRunning = true;
-  lapStartedAt = performance.now();
-  if (lapAccumMs === 0) lapLastMarkAt = 0;
-  updateLapButtons();
-  cancelAnimationFrame(lapRaf);
-  lapRaf = requestAnimationFrame(tickLapDisplay);
-}
-
-function stopLapTimer() {
-  if (!lapRunning) return;
-  lapAccumMs += performance.now() - lapStartedAt;
-  lapRunning = false;
-  cancelAnimationFrame(lapRaf);
-  els.lapDisplay.textContent = formatLapTime(lapAccumMs);
-  updateLapButtons();
-}
-
-function markLap() {
-  const total = lapElapsedMs();
-  if (total <= 0 && !lapRunning) return;
-  const splitMs = total - lapLastMarkAt;
-  lapLastMarkAt = total;
-  lapSplits.push({ splitMs, totalMs: total });
-  renderLapList();
-}
-
-function resetLapTimer() {
-  lapRunning = false;
-  lapStartedAt = 0;
-  lapAccumMs = 0;
-  lapLastMarkAt = 0;
-  lapSplits = [];
-  cancelAnimationFrame(lapRaf);
-  els.lapDisplay.textContent = formatLapTime(0);
-  renderLapList();
-  updateLapButtons();
 }
 
 function selectedTrack() {
@@ -976,7 +869,6 @@ function resetSession() {
   fitTrack();
   clearMetrics();
   clearDtcCache();
-  resetLapTimer();
   interpFrom = null;
   interpTo = null;
   stopInterpLoop();
@@ -997,10 +889,6 @@ els.themeToggle.addEventListener("click", () => {
   applyTheme(currentTheme() === "light" ? "dark" : "light");
 });
 els.trackSelect.addEventListener("change", () => applyTrack(els.trackSelect.value));
-els.lapStartBtn.addEventListener("click", startLapTimer);
-els.lapStopBtn.addEventListener("click", stopLapTimer);
-els.lapLapBtn.addEventListener("click", markLap);
-els.lapResetBtn.addEventListener("click", resetLapTimer);
 
 function connect() {
   const es = new EventSource("/events");
