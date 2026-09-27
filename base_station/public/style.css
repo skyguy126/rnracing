@@ -857,7 +857,8 @@ html[data-theme="light"] .capture-btn.recording {
 
 .map {
   width: 100%;
-  height: clamp(240px, 42vh, 420px);
+  aspect-ratio: 3 / 2;
+  height: auto;
   margin-top: 0.45rem;
   border: 1px solid var(--line);
   background: var(--bg1);
@@ -1030,10 +1031,6 @@ html[data-theme="light"] .mapboxgl-ctrl-attrib a {
   .interp-toggle,
   .link {
     min-height: 44px;
-  }
-
-  .map {
-    height: clamp(280px, 55vh, 480px);
   }
 }
 
